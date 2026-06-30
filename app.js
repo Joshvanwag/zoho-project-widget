@@ -115,6 +115,50 @@ function closeWidgetAfterSuccess() {
   }, cfg.successCloseDelayMs || 1400);
 }
 
+function sleep(ms) {
+  return new Promise(resolve => window.setTimeout(resolve, ms));
+}
+
+async function fetchDealRecord() {
+  const response = await ZOHO.CRM.API.getRecord({
+    Entity: cfg.moduleApiName,
+    RecordID: state.dealId
+  });
+
+  const deal = response?.data?.[0];
+  if (!deal) throw new Error("The Deal could not be loaded.");
+  return deal;
+}
+
+function savedPayloadIsVisibleOnDeal(payload) {
+  return Object.keys(payload).every(apiName => {
+    return normalize(state.deal?.[apiName]) === normalize(payload[apiName]);
+  });
+}
+
+async function waitForSavedFieldsToBeVisible(payload) {
+  if (!payload || Object.keys(payload).length === 0) return;
+
+  // CRM can report success on updateRecord before the standalone function sees
+  // the updated values. Poll the Deal briefly so the first Create click does
+  // not fail and require a manual Recheck.
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    await sleep(attempt === 0 ? 800 : 650);
+    state.deal = await fetchDealRecord();
+    validateDeal();
+
+    if (savedPayloadIsVisibleOnDeal(payload) && state.currentMissingFields.length === 0) {
+      return;
+    }
+  }
+
+  // Keep the user's typed values merged locally even if CRM is slow to echo them
+  // back. The function should normally see the values after the polling above.
+  Object.keys(payload).forEach(key => {
+    state.deal[key] = payload[key];
+  });
+  validateDeal();
+}
 
 function valueIsEmpty(value) {
   if (value === null || value === undefined) return true;
@@ -450,13 +494,7 @@ async function loadDeal() {
   try {
     await loadFieldMetadata();
 
-    const response = await ZOHO.CRM.API.getRecord({
-      Entity: cfg.moduleApiName,
-      RecordID: state.dealId
-    });
-
-    state.deal = response?.data?.[0];
-    if (!state.deal) throw new Error("The Deal could not be loaded.");
+    state.deal = await fetchDealRecord();
 
     validateDeal();
     await loadRelatedQuotes();
@@ -510,7 +548,7 @@ async function saveEditableDealFieldsIfNeeded() {
   const payload = collectEditableDealFieldUpdates();
 
   if (Object.keys(payload).length === 0) {
-    return true;
+    return {};
   }
 
   setMessage("info", "Saving missing fields back to the Deal...");
@@ -531,16 +569,15 @@ async function saveEditableDealFieldsIfNeeded() {
     throw new Error(response?.data?.[0]?.message || "Could not update the Deal.");
   }
 
-  // Do not immediately reload the Deal here. Zoho CRM can sometimes return a stale
-  // record for a moment right after updateRecord, which made fields such as Zip
-  // appear empty again even though the user had just typed them. Merge the saved
-  // payload into the local Deal state and let the create function continue.
   Object.keys(payload).forEach(key => {
     state.deal[key] = payload[key];
     delete state.draftValues[key];
   });
   validateDeal();
-  return true;
+
+  setMessage("info", "Confirming saved fields...");
+  await waitForSavedFieldsToBeVisible(payload);
+  return payload;
 }
 
 async function createProject() {
