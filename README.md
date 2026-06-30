@@ -17,3 +17,7 @@ Upload these files to the GitHub Pages repo root:
 - `config.js`
 - `style.css`
 - `README.md`
+
+
+## v7 note
+Changed save behavior so the widget does not immediately reload the Deal after saving missing fields. This avoids Zoho returning a stale record and showing newly entered values, especially Work Site Zip, as blank right after submit.

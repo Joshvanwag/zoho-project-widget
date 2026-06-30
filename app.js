@@ -489,8 +489,15 @@ async function saveEditableDealFieldsIfNeeded() {
     throw new Error(response?.data?.[0]?.message || "Could not update the Deal.");
   }
 
-  Object.keys(payload).forEach(key => delete state.draftValues[key]);
-  await loadDeal();
+  // Do not immediately reload the Deal here. Zoho CRM can sometimes return a stale
+  // record for a moment right after updateRecord, which made fields such as Zip
+  // appear empty again even though the user had just typed them. Merge the saved
+  // payload into the local Deal state and let the create function continue.
+  Object.keys(payload).forEach(key => {
+    state.deal[key] = payload[key];
+    delete state.draftValues[key];
+  });
+  validateDeal();
   return true;
 }
 
