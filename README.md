@@ -1,15 +1,19 @@
 # Zoho Project Widget
 
-GitHub Pages files for the CRM Deal -> Zoho Projects creation widget.
+GitHub Pages hosted widget for creating Zoho Projects from CRM Deals.
 
-Upload these files to the root of the GitHub repo:
+## v6 behavior
 
-- index.html
-- app.js
-- config.js
-- style.css
-- README.md
+- Picklist fields render as real dropdowns from `config.js` options.
+- Text fields update draft values while typing without rerendering the form.
+- The Create button enables as soon as the current draft values are complete.
+- Validation messages refresh on field blur and again on final submit.
+- Clicking Save & Create Project validates current values, saves editable missing fields back to CRM, then calls the `create_project` function.
 
-This version renders picklist fields as dropdowns using the explicit choices in config.js first, then falls back to Zoho CRM field metadata if no options are configured.
+Upload these files to the GitHub Pages repo root:
 
-Do not upload any Deluge function files to GitHub. The create_project Deluge function stays inside Zoho CRM.
+- `index.html`
+- `app.js`
+- `config.js`
+- `style.css`
+- `README.md`

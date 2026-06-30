@@ -202,14 +202,31 @@ function renderFields() {
 
     if (!isDisabled) {
       input.addEventListener("input", event => {
+        // Keep the draft value current while the user types, but do not rerender
+        // the form or update validation messages on every keystroke. This keeps
+        // focus/cursor stable and still lets the Create button become enabled
+        // as soon as the last required value is present.
         state.draftValues[field.apiName] = event.target.value;
         validateDeal();
-        render();
+        updateCreateButtonStateOnly();
       });
+
+      input.addEventListener("blur", () => {
+        // Show/update validation messaging only when the user leaves the field.
+        validateDeal();
+        renderStatus();
+      });
+
       input.addEventListener("change", event => {
         state.draftValues[field.apiName] = event.target.value;
         validateDeal();
-        render();
+        if (field.type === "picklist") {
+          // Picklists are a deliberate selection, so updating the visible status
+          // immediately is helpful and does not cause typing/focus issues.
+          renderStatus();
+        } else {
+          updateCreateButtonStateOnly();
+        }
       });
     }
 
@@ -291,16 +308,23 @@ function canCreateProject() {
   );
 }
 
-function render() {
+function updateCreateButtonStateOnly() {
+  if (!state.deal) {
+    els.createButton.disabled = true;
+    return;
+  }
+
+  els.createButton.disabled = !canCreateProject();
+  els.createButton.textContent = state.actualMissingFields.length > 0 ? "Save & Create Project" : "Create Project";
+}
+
+function renderStatus() {
   if (!state.deal) {
     els.statusBadge.textContent = "Loading";
     els.statusBadge.className = "badge";
     els.createButton.disabled = true;
     return;
   }
-
-  renderFields();
-  renderSalesOrders();
 
   if (state.actualMissingFields.length > 0) {
     els.fieldsForm.classList.remove("hidden");
@@ -365,6 +389,17 @@ function render() {
   els.createButton.disabled = !canCreateProject();
   els.createButton.textContent = state.actualMissingFields.length > 0 ? "Save & Create Project" : "Create Project";
   setMessage("success", `Ready to create project from ${normalize(selectedQuote?.[cfg.quoteSoNumberField])}.`);
+}
+
+function render() {
+  if (!state.deal) {
+    renderStatus();
+    return;
+  }
+
+  renderFields();
+  renderSalesOrders();
+  renderStatus();
 }
 
 async function loadDeal() {
