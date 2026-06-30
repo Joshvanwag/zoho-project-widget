@@ -3,10 +3,14 @@ const cfg = window.PROJECT_WIDGET_CONFIG;
 const state = {
   dealId: null,
   deal: null,
+  fieldMeta: {},
+  draftValues: {},
   quotes: [],
   eligibleQuotes: [],
   selectedQuoteId: "",
-  missingFields: [],
+  actualMissingFields: [],
+  currentMissingFields: [],
+  readOnlyMissingFields: [],
   isInstall: false,
   isBusy: false
 };
@@ -17,7 +21,6 @@ const els = {
   message: document.getElementById("message"),
   fieldsForm: document.getElementById("fieldsForm"),
   fieldContainer: document.getElementById("fieldContainer"),
-  saveDealButton: document.getElementById("saveDealButton"),
   refreshButton: document.getElementById("refreshButton"),
   createButton: document.getElementById("createButton"),
   debug: document.getElementById("debug")
@@ -46,7 +49,6 @@ els.soHelp = document.getElementById("soHelp");
 function setBusy(isBusy) {
   state.isBusy = isBusy;
   els.refreshButton.disabled = isBusy;
-  els.saveDealButton.disabled = isBusy;
   render();
 }
 
@@ -71,8 +73,15 @@ function valueIsEmpty(value) {
   return false;
 }
 
-function getFieldValue(apiName) {
+function getDealFieldValue(apiName) {
   return state.deal ? state.deal[apiName] : null;
+}
+
+function getCurrentFieldValue(apiName) {
+  if (Object.prototype.hasOwnProperty.call(state.draftValues, apiName)) {
+    return state.draftValues[apiName];
+  }
+  return getDealFieldValue(apiName);
 }
 
 function displayValue(value) {
@@ -85,16 +94,69 @@ function normalize(value) {
   return displayValue(value).trim();
 }
 
+function fieldIsEditable(field) {
+  return field.editable !== false && field.type !== "lookup";
+}
+
+async function loadFieldMetadata() {
+  if (Object.keys(state.fieldMeta).length > 0) return;
+
+  try {
+    const response = await ZOHO.CRM.META.getFields({ Entity: cfg.moduleApiName });
+    const fields = response?.fields || response?.data || [];
+
+    fields.forEach(field => {
+      if (!field.api_name) return;
+      state.fieldMeta[field.api_name] = field;
+    });
+
+    debug({ fieldMetaLoaded: Object.keys(state.fieldMeta).length });
+  } catch (error) {
+    // If metadata fails, normal text fields still work. Picklists can fall back to config options.
+    debug({ fieldMetaError: error });
+  }
+}
+
+function getPicklistOptions(field) {
+  const meta = state.fieldMeta[field.apiName];
+  const options = [];
+
+  if (Array.isArray(meta?.pick_list_values)) {
+    meta.pick_list_values.forEach(option => {
+      const value = option.actual_value || option.display_value || option.sequence_number;
+      const label = option.display_value || option.actual_value || value;
+      if (value !== undefined && value !== null && value !== "") {
+        options.push({ value: String(value), label: String(label) });
+      }
+    });
+  }
+
+  if (options.length === 0 && Array.isArray(field.options)) {
+    field.options.forEach(option => {
+      if (typeof option === "string") {
+        options.push({ value: option, label: option });
+      } else if (option && option.value) {
+        options.push({ value: option.value, label: option.label || option.value });
+      }
+    });
+  }
+
+  return options;
+}
+
 function validateDeal() {
-  const installValue = getFieldValue(cfg.installTypeField);
+  const installValue = getCurrentFieldValue(cfg.installTypeField);
   state.isInstall = cfg.installAllowedValues.includes(normalize(installValue));
-  state.missingFields = cfg.requiredFields.filter(field => valueIsEmpty(getFieldValue(field.apiName)));
+
+  state.actualMissingFields = cfg.requiredFields.filter(field => valueIsEmpty(getDealFieldValue(field.apiName)));
+  state.currentMissingFields = cfg.requiredFields.filter(field => valueIsEmpty(getCurrentFieldValue(field.apiName)));
+  state.readOnlyMissingFields = state.actualMissingFields.filter(field => !fieldIsEditable(field) && valueIsEmpty(getDealFieldValue(field.apiName)));
 }
 
 function renderFields() {
   els.fieldContainer.innerHTML = "";
 
-  state.missingFields.forEach(field => {
+  state.actualMissingFields.forEach(field => {
     const row = document.createElement("div");
     row.className = "field-row";
 
@@ -103,26 +165,60 @@ function renderFields() {
     label.setAttribute("for", field.apiName);
 
     let input;
+    const isDisabled = !fieldIsEditable(field);
+
     if (field.type === "textarea") {
       input = document.createElement("textarea");
       input.rows = 4;
+    } else if (field.type === "picklist") {
+      input = document.createElement("select");
+      const placeholder = document.createElement("option");
+      placeholder.value = "";
+      placeholder.textContent = `Select ${field.label}...`;
+      input.appendChild(placeholder);
+
+      getPicklistOptions(field).forEach(optionData => {
+        const option = document.createElement("option");
+        option.value = optionData.value;
+        option.textContent = optionData.label;
+        input.appendChild(option);
+      });
     } else {
       input = document.createElement("input");
-      input.type = field.type === "date" ? "date" : "text";
+      if (field.type === "date") input.type = "date";
+      else if (["currency", "decimal", "number"].includes(field.type)) input.type = "number";
+      else input.type = "text";
     }
 
     input.id = field.apiName;
     input.name = field.apiName;
-    input.value = displayValue(getFieldValue(field.apiName));
-    input.disabled = field.editable === false || field.type === "lookup";
+    input.value = displayValue(getCurrentFieldValue(field.apiName));
+    input.disabled = isDisabled || state.isBusy;
     input.placeholder = input.disabled ? "Edit this field on the Deal record" : `Enter ${field.label}`;
+
+    if (!isDisabled) {
+      input.addEventListener("input", event => {
+        state.draftValues[field.apiName] = event.target.value;
+        validateDeal();
+        render();
+      });
+      input.addEventListener("change", event => {
+        state.draftValues[field.apiName] = event.target.value;
+        validateDeal();
+        render();
+      });
+    }
 
     row.appendChild(label);
     row.appendChild(input);
 
-    if (input.disabled) {
+    if (isDisabled) {
       const note = document.createElement("small");
-      note.textContent = "This field should be edited on the Deal record.";
+      note.textContent = "This field must be edited on the Deal record.";
+      row.appendChild(note);
+    } else if (field.type === "picklist" && getPicklistOptions(field).length === 0) {
+      const note = document.createElement("small");
+      note.textContent = "Picklist options could not be loaded from CRM metadata. Recheck the widget connection/settings.";
       row.appendChild(note);
     }
 
@@ -145,7 +241,7 @@ function quoteLabel(quote) {
 function renderSalesOrders() {
   els.soSelect.innerHTML = "";
 
-  if (!state.isInstall || state.missingFields.length > 0) {
+  if (!state.isInstall) {
     els.soSection.classList.add("hidden");
     return;
   }
@@ -180,7 +276,15 @@ function renderSalesOrders() {
 }
 
 function canCreateProject() {
-  return state.deal && state.isInstall && state.missingFields.length === 0 && state.selectedQuoteId && !state.isBusy;
+  return Boolean(
+    state.deal &&
+    state.isInstall &&
+    state.currentMissingFields.length === 0 &&
+    state.readOnlyMissingFields.length === 0 &&
+    state.eligibleQuotes.length > 0 &&
+    state.selectedQuoteId &&
+    !state.isBusy
+  );
 }
 
 function render() {
@@ -194,23 +298,39 @@ function render() {
   renderFields();
   renderSalesOrders();
 
+  if (state.actualMissingFields.length > 0) {
+    els.fieldsForm.classList.remove("hidden");
+  } else {
+    els.fieldsForm.classList.add("hidden");
+  }
+
   if (!state.isInstall) {
     els.subtitle.textContent = "This Deal is not eligible for project creation.";
     els.statusBadge.textContent = "Blocked";
     els.statusBadge.className = "badge bad";
-    els.fieldsForm.classList.add("hidden");
     els.createButton.disabled = true;
+    els.createButton.textContent = "Create Project";
     setMessage("error", `This is not an install Deal. Project creation is disabled. Check the ${cfg.installTypeField} field on the Deal.`);
     return;
   }
 
-  if (state.missingFields.length > 0) {
-    els.subtitle.textContent = "Some required fields are missing.";
+  if (state.readOnlyMissingFields.length > 0) {
+    els.subtitle.textContent = "Some required fields must be edited on the Deal.";
     els.statusBadge.textContent = "Missing Fields";
     els.statusBadge.className = "badge warn";
-    els.fieldsForm.classList.remove("hidden");
     els.createButton.disabled = true;
-    setMessage("warning", "Required fields are missing. Fill the editable fields here or go back to the Deal to update lookup/read-only fields.");
+    els.createButton.textContent = "Create Project";
+    setMessage("warning", `These fields must be updated on the Deal first: ${state.readOnlyMissingFields.map(f => f.label).join(", ")}.`);
+    return;
+  }
+
+  if (state.currentMissingFields.length > 0) {
+    els.subtitle.textContent = "Fill the missing required fields.";
+    els.statusBadge.textContent = "Missing Fields";
+    els.statusBadge.className = "badge warn";
+    els.createButton.disabled = true;
+    els.createButton.textContent = "Create Project";
+    setMessage("warning", "Fill the missing required fields above. Picklist fields must be selected from the dropdown.");
     return;
   }
 
@@ -218,8 +338,8 @@ function render() {
     els.subtitle.textContent = "The Deal is ready, but no SO Number was found.";
     els.statusBadge.textContent = "No SO";
     els.statusBadge.className = "badge warn";
-    els.fieldsForm.classList.add("hidden");
     els.createButton.disabled = true;
+    els.createButton.textContent = "Create Project";
     setMessage("warning", "Everything required is filled, but no related Sales Quote has a Sales Order Number. Create the Sales Order first, then recheck the Deal.");
     return;
   }
@@ -228,18 +348,18 @@ function render() {
     els.subtitle.textContent = "Everything required is here. Select an SO Number.";
     els.statusBadge.textContent = "Select SO";
     els.statusBadge.className = "badge warn";
-    els.fieldsForm.classList.add("hidden");
     els.createButton.disabled = true;
+    els.createButton.textContent = state.actualMissingFields.length > 0 ? "Save & Create Project" : "Create Project";
     setMessage("info", "Select the Sales Order Number to use for the project name, then create the project.");
     return;
   }
 
   const selectedQuote = state.eligibleQuotes.find(q => q.id === state.selectedQuoteId);
-  els.subtitle.textContent = "Everything required is here.";
+  els.subtitle.textContent = state.actualMissingFields.length > 0 ? "Ready to save missing fields and create the project." : "Everything required is here.";
   els.statusBadge.textContent = "Ready";
   els.statusBadge.className = "badge good";
-  els.fieldsForm.classList.add("hidden");
   els.createButton.disabled = !canCreateProject();
+  els.createButton.textContent = state.actualMissingFields.length > 0 ? "Save & Create Project" : "Create Project";
   setMessage("success", `Ready to create project from ${normalize(selectedQuote?.[cfg.quoteSoNumberField])}.`);
 }
 
@@ -247,6 +367,8 @@ async function loadDeal() {
   if (!state.dealId) throw new Error("No Deal ID was passed to the widget.");
   setBusy(true);
   try {
+    await loadFieldMetadata();
+
     const response = await ZOHO.CRM.API.getRecord({
       Entity: cfg.moduleApiName,
       RecordID: state.dealId
@@ -257,7 +379,7 @@ async function loadDeal() {
 
     validateDeal();
     await loadRelatedQuotes();
-    debug({ deal: state.deal, quotes: state.quotes, eligibleQuotes: state.eligibleQuotes, missingFields: state.missingFields, isInstall: state.isInstall });
+    debug({ deal: state.deal, quotes: state.quotes, eligibleQuotes: state.eligibleQuotes, actualMissingFields: state.actualMissingFields, currentMissingFields: state.currentMissingFields, isInstall: state.isInstall });
   } catch (error) {
     setMessage("error", error.message || "Error loading Deal.");
   } finally {
@@ -266,9 +388,9 @@ async function loadDeal() {
 }
 
 async function loadRelatedQuotes() {
+  const previousSelectedQuoteId = state.selectedQuoteId;
   state.quotes = [];
   state.eligibleQuotes = [];
-  state.selectedQuoteId = "";
 
   const response = await ZOHO.CRM.API.getRelatedRecords({
     Entity: cfg.moduleApiName,
@@ -280,58 +402,86 @@ async function loadRelatedQuotes() {
 
   state.quotes = response?.data || [];
   state.eligibleQuotes = state.quotes.filter(q => !valueIsEmpty(q[cfg.quoteSoNumberField]));
+
+  if (previousSelectedQuoteId && state.eligibleQuotes.some(q => q.id === previousSelectedQuoteId)) {
+    state.selectedQuoteId = previousSelectedQuoteId;
+  } else {
+    state.selectedQuoteId = "";
+  }
 }
 
-async function saveEditableDealFields() {
+function collectEditableDealFieldUpdates() {
   const payload = {};
 
-  state.missingFields.forEach(field => {
-    if (field.editable === false || field.type === "lookup") return;
-    const input = document.getElementById(field.apiName);
-    if (input && input.value.trim() !== "") payload[field.apiName] = input.value.trim();
+  state.actualMissingFields.forEach(field => {
+    if (!fieldIsEditable(field)) return;
+
+    const value = getCurrentFieldValue(field.apiName);
+    if (!valueIsEmpty(value)) {
+      payload[field.apiName] = typeof value === "string" ? value.trim() : value;
+    }
   });
 
+  return payload;
+}
+
+async function saveEditableDealFieldsIfNeeded() {
+  const payload = collectEditableDealFieldUpdates();
+
   if (Object.keys(payload).length === 0) {
-    setMessage("warning", "No editable missing fields were filled in. Update the Deal record for lookup/read-only fields.");
-    return;
+    return true;
   }
 
-  setBusy(true);
-  try {
-    const response = await ZOHO.CRM.API.updateRecord({
-      Entity: cfg.moduleApiName,
-      APIData: {
-        id: state.dealId,
-        ...payload
-      },
-      Trigger: ["workflow"]
-    });
+  setMessage("info", "Saving missing fields back to the Deal...");
 
-    debug({ updateResponse: response });
-    await loadDeal();
-    setMessage("success", "Deal fields were saved. Rechecked the Deal.");
-  } catch (error) {
-    setMessage("error", error.message || "Could not update the Deal.");
-  } finally {
-    setBusy(false);
+  const response = await ZOHO.CRM.API.updateRecord({
+    Entity: cfg.moduleApiName,
+    APIData: {
+      id: state.dealId,
+      ...payload
+    },
+    Trigger: ["workflow"]
+  });
+
+  debug({ updateResponse: response });
+
+  const updateStatus = response?.data?.[0]?.status;
+  if (updateStatus && updateStatus !== "success") {
+    throw new Error(response?.data?.[0]?.message || "Could not update the Deal.");
   }
+
+  Object.keys(payload).forEach(key => delete state.draftValues[key]);
+  await loadDeal();
+  return true;
 }
 
 async function createProject() {
   validateDeal();
+
   if (!canCreateProject()) {
     render();
     return;
   }
 
-  const selectedQuote = state.eligibleQuotes.find(q => q.id === state.selectedQuoteId);
-  const salesOrderNumber = normalize(selectedQuote?.[cfg.quoteSoNumberField]);
-
   setBusy(true);
   els.createButton.disabled = true;
-  setMessage("info", "Creating the Project...");
 
   try {
+    if (state.actualMissingFields.length > 0) {
+      await saveEditableDealFieldsIfNeeded();
+      validateDeal();
+
+      if (!canCreateProject()) {
+        render();
+        throw new Error("The Deal was saved, but it still is not ready to create a Project. Recheck the required fields and SO Number.");
+      }
+    }
+
+    const selectedQuote = state.eligibleQuotes.find(q => q.id === state.selectedQuoteId);
+    const salesOrderNumber = normalize(selectedQuote?.[cfg.quoteSoNumberField]);
+
+    setMessage("info", "Creating the Project...");
+
     const response = await ZOHO.CRM.FUNCTIONS.execute(cfg.createProjectFunctionName, {
       arguments: JSON.stringify({
         deal_id: state.dealId,
@@ -364,7 +514,6 @@ async function createProject() {
 
 function wireEvents() {
   els.refreshButton.addEventListener("click", loadDeal);
-  els.saveDealButton.addEventListener("click", saveEditableDealFields);
   els.createButton.addEventListener("click", createProject);
   els.soSelect.addEventListener("change", event => {
     state.selectedQuoteId = event.target.value;
