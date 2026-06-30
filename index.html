@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Create Zoho Project</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <main class="wrap">
+    <section class="card">
+      <div class="header">
+        <div>
+          <h1>Create Project</h1>
+          <p id="subtitle">Checking deal requirements...</p>
+        </div>
+        <span id="statusBadge" class="badge">Loading</span>
+      </div>
+
+      <div id="message" class="message info">Loading the Deal from Zoho CRM.</div>
+
+      <form id="fieldsForm" class="fields hidden">
+        <h2>Required Deal Fields</h2>
+        <p class="hint">Fill missing fields here, then save them back to the Deal before creating the Project.</p>
+        <div id="fieldContainer"></div>
+        <button id="saveDealButton" type="button" class="secondary">Save Missing Fields to Deal</button>
+      </form>
+
+      <div class="actions">
+        <button id="refreshButton" type="button" class="secondary">Recheck Deal</button>
+        <button id="createButton" type="button" disabled>Create Project</button>
+      </div>
+
+      <pre id="debug" class="debug hidden"></pre>
+    </section>
+  </main>
+
+  <script src="https://live.zwidgets.com/js-sdk/1.2/ZohoEmbededAppSDK.min.js"></script>
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
