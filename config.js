@@ -1,25 +1,37 @@
-// Change these to match your CRM field API names and function name.
+// Zoho CRM Deal -> Zoho Projects creation widget configuration.
 window.PROJECT_WIDGET_CONFIG = {
   moduleApiName: "Deals",
 
-  // Field that determines whether project creation is allowed.
-  installTypeField: "Install_Type",
-  installAllowedValues: ["Install", "Installation", "Install Deal"],
+  installTypeField: "Deal_Type",
+  installAllowedValues: ["Install Deal"],
 
-  // Required fields on the Deal before project creation.
-  // apiName must be the CRM field API name.
+  quotesRelatedListApiName: "Quotes",
+  quoteModuleApiName: "Quotes",
+  quoteSoNumberField: "Sales_Order_Number",
+  quoteDisplayFields: ["Sales_Order_Number", "CRM_Quote_Number", "Quote_Number", "Subject", "Grand_Total", "Quote_Stage"],
+
+  createProjectFunctionName: "create_project",
+
+  // Missing means null/blank. Numeric 0 is allowed.
   requiredFields: [
     { apiName: "Deal_Name", label: "Deal Name", type: "text", editable: false },
-    { apiName: "Account_Name", label: "Account", type: "lookup", editable: false },
-    { apiName: "Contact_Name", label: "Contact", type: "lookup", editable: false },
-    { apiName: "Closing_Date", label: "Closing Date", type: "date", editable: true },
-    { apiName: "Scope_Internal", label: "Scope Internal", type: "textarea", editable: true },
-    { apiName: "Project_Deliverables", label: "Project Deliverables", type: "textarea", editable: true }
+    { apiName: "Deal_Type", label: "Deal Type", type: "picklist", editable: false },
+    { apiName: "Contact_Name", label: "Primary Contact", type: "lookup", editable: false },
+    { apiName: "Description_of_Work", label: "Description of Work", type: "textarea", editable: true },
+    { apiName: "Description_of_Work_2", label: "Description of Work (INTERNAL)", type: "textarea", editable: true },
+    { apiName: "SLA_Level", label: "SLA Level", type: "picklist", editable: true },
+    { apiName: "Amount", label: "Project $ Amount", type: "currency", editable: false },
+    { apiName: "Payment_Schedule", label: "Billing Terms", type: "picklist", editable: true },
+    { apiName: "Building_Name", label: "Building Name", type: "text", editable: true },
+    { apiName: "Room_Name", label: "Room Name", type: "text", editable: true },
+    { apiName: "Work_Site_Address", label: "Work Site Address", type: "text", editable: true },
+    { apiName: "Work_Site_City", label: "Work Site City", type: "text", editable: true },
+    { apiName: "D_State_Selection", label: "Work Site State", type: "picklist", editable: true },
+    { apiName: "Work_Zip_Code", label: "Work Site Zip", type: "text", editable: true },
+    { apiName: "Installation_Hours", label: "Installation Hours", type: "decimal", editable: true },
+    { apiName: "Programming_Hours", label: "Programming Hours", type: "decimal", editable: true },
+    { apiName: "Schedule_Expectation", label: "Schedule Expectation", type: "picklist", editable: true }
   ],
-
-  // CRM custom function that creates the Zoho Project.
-  // The function should accept deal_id and return success/error JSON.
-  createProjectFunctionName: "create_project_from_deal",
 
   showDebug: false
 };

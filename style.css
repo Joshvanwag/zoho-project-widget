@@ -169,3 +169,24 @@ button:disabled {
   border-radius: 10px;
   overflow: auto;
 }
+
+select {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font: inherit;
+  background: #ffffff;
+}
+
+select:disabled {
+  background: #f3f4f6;
+  color: #6b7280;
+}
+
+.so-section {
+  border-top: 1px solid #e5e7eb;
+  margin-top: 20px;
+  padding-top: 4px;
+}
