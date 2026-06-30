@@ -2,13 +2,14 @@
 
 GitHub Pages hosted widget for creating Zoho Projects from CRM Deals.
 
-## v6 behavior
+## v11 behavior
 
-- Picklist fields render as real dropdowns from `config.js` options.
-- Text fields update draft values while typing without rerendering the form.
-- The Create button enables as soon as the current draft values are complete.
-- Validation messages refresh on field blur and again on final submit.
-- Clicking Save & Create Project validates current values, saves editable missing fields back to CRM, then calls the `create_project` function.
+- Clean UI: only missing required fields and Sales Order Number dropdown are shown.
+- Required field labels show a red star.
+- Editable missing Deal fields save back to CRM before project creation.
+- Calls the `create_project` CRM function.
+- Shows a success message when the function returns `success: true`, then closes/reloads the popup.
+- Shows the function's returned error message when project creation or CRM association fails.
 
 Upload these files to the GitHub Pages repo root:
 
@@ -17,7 +18,3 @@ Upload these files to the GitHub Pages repo root:
 - `config.js`
 - `style.css`
 - `README.md`
-
-
-## v7 note
-Changed save behavior so the widget does not immediately reload the Deal after saving missing fields. This avoids Zoho returning a stale record and showing newly entered values, especially Work Site Zip, as blank right after submit.

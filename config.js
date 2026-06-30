@@ -33,5 +33,6 @@ window.PROJECT_WIDGET_CONFIG = {
     { apiName: "Schedule_Expectation", label: "Schedule Expectation", type: "picklist", editable: true, options: ["Next available", "Target Date (date needed)", "By Deadline (date needed)", "ASAP"] }
   ],
 
-  showDebug: false
+  showDebug: false,
+  successCloseDelayMs: 1400
 };

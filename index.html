@@ -12,16 +12,14 @@
       <div class="header">
         <div>
           <h1>Create Project</h1>
-          <p id="subtitle">Checking deal requirements...</p>
+          <p id="subtitle" class="hidden">Checking deal requirements...</p>
         </div>
-        <span id="statusBadge" class="badge">Loading</span>
+        <span id="statusBadge" class="badge hidden">Loading</span>
       </div>
 
-      <div id="message" class="message info">Loading the Deal from Zoho CRM.</div>
+      <div id="message" class="message info hidden">Loading the Deal from Zoho CRM.</div>
 
       <form id="fieldsForm" class="fields hidden">
-        <h2>Missing Required Deal Fields</h2>
-        <p class="hint">Fill the editable fields here. They will save back to the Deal automatically when you click Create Project.</p>
         <div id="fieldContainer"></div>
       </form>
 

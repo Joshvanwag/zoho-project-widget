@@ -12,7 +12,8 @@ const state = {
   currentMissingFields: [],
   readOnlyMissingFields: [],
   isInstall: false,
-  isBusy: false
+  isBusy: false,
+  projectCreated: false
 };
 
 const els = {
@@ -30,14 +31,12 @@ const soSection = document.createElement("section");
 soSection.id = "soSection";
 soSection.className = "so-section hidden";
 soSection.innerHTML = `
-  <h2>Select Sales Order</h2>
-  <p class="hint">Choose a related Sales Quote that already has a Sales Order Number.</p>
   <div class="field-row">
-    <label for="soSelect">Sales Order Number</label>
+    <label for="soSelect">Sales Order Number <span class="required-star">*</span></label>
     <select id="soSelect">
       <option value="">Loading related Sales Quotes...</option>
     </select>
-    <small id="soHelp"></small>
+    <small id="soHelp" class="hidden"></small>
   </div>
 `;
 document.querySelector(".actions").before(soSection);
@@ -54,7 +53,13 @@ function setBusy(isBusy) {
 
 function setMessage(type, text) {
   els.message.className = `message ${type}`;
-  els.message.textContent = text;
+  els.message.textContent = text || "";
+
+  if (!text || type === "info" || type === "warning") {
+    els.message.classList.add("hidden");
+  } else {
+    els.message.classList.remove("hidden");
+  }
 }
 
 function debug(data) {
@@ -62,6 +67,54 @@ function debug(data) {
   els.debug.classList.remove("hidden");
   els.debug.textContent = JSON.stringify(data, null, 2);
 }
+
+function parseFunctionResult(response) {
+  let details = response;
+
+  if (response?.details?.output !== undefined) {
+    details = response.details.output;
+  } else if (response?.output !== undefined) {
+    details = response.output;
+  }
+
+  if (typeof details === "string") {
+    const trimmed = details.trim();
+    if (!trimmed) return {};
+
+    try {
+      return JSON.parse(trimmed);
+    } catch (error) {
+      // Deluge Map.toString() is usually JSON-like, but this fallback keeps the
+      // widget from crashing if Zoho returns a plain string instead.
+      return { success: false, message: trimmed };
+    }
+  }
+
+  return details || {};
+}
+
+function closeWidgetAfterSuccess() {
+  window.setTimeout(() => {
+    try {
+      if (ZOHO?.CRM?.UI?.Popup?.closeReload) {
+        ZOHO.CRM.UI.Popup.closeReload();
+        return;
+      }
+    } catch (error) {}
+
+    try {
+      if (ZOHO?.CRM?.UI?.Popup?.close) {
+        ZOHO.CRM.UI.Popup.close();
+        return;
+      }
+    } catch (error) {}
+
+    try {
+      window.close();
+    } catch (error) {}
+  }, cfg.successCloseDelayMs || 1400);
+}
+
 
 function valueIsEmpty(value) {
   if (value === null || value === undefined) return true;
@@ -165,8 +218,12 @@ function renderFields() {
     row.className = "field-row";
 
     const label = document.createElement("label");
-    label.textContent = field.label;
     label.setAttribute("for", field.apiName);
+    label.appendChild(document.createTextNode(field.label + " "));
+    const star = document.createElement("span");
+    star.className = "required-star";
+    star.textContent = "*";
+    label.appendChild(star);
 
     let input;
     const isDisabled = !fieldIsEditable(field);
@@ -304,7 +361,8 @@ function canCreateProject() {
     state.readOnlyMissingFields.length === 0 &&
     state.eligibleQuotes.length > 0 &&
     state.selectedQuoteId &&
-    !state.isBusy
+    !state.isBusy &&
+    !state.projectCreated
   );
 }
 
@@ -319,9 +377,12 @@ function updateCreateButtonStateOnly() {
 }
 
 function renderStatus() {
+  // Keep the top header clean. The widget only shows fields, SO dropdown,
+  // and success/error messages.
+  els.subtitle.classList.add("hidden");
+  els.statusBadge.classList.add("hidden");
+
   if (!state.deal) {
-    els.statusBadge.textContent = "Loading";
-    els.statusBadge.className = "badge";
     els.createButton.disabled = true;
     return;
   }
@@ -333,9 +394,6 @@ function renderStatus() {
   }
 
   if (!state.isInstall) {
-    els.subtitle.textContent = "This Deal is not eligible for project creation.";
-    els.statusBadge.textContent = "Blocked";
-    els.statusBadge.className = "badge bad";
     els.createButton.disabled = true;
     els.createButton.textContent = "Create Project";
     setMessage("error", `This is not an install Deal. Project creation is disabled. Check the ${cfg.installTypeField} field on the Deal.`);
@@ -343,52 +401,36 @@ function renderStatus() {
   }
 
   if (state.readOnlyMissingFields.length > 0) {
-    els.subtitle.textContent = "Some required fields must be edited on the Deal.";
-    els.statusBadge.textContent = "Missing Fields";
-    els.statusBadge.className = "badge warn";
     els.createButton.disabled = true;
     els.createButton.textContent = "Create Project";
-    setMessage("warning", `These fields must be updated on the Deal first: ${state.readOnlyMissingFields.map(f => f.label).join(", ")}.`);
+    setMessage("error", `These fields must be updated on the Deal first: ${state.readOnlyMissingFields.map(f => f.label).join(", ")}.`);
     return;
   }
 
   if (state.currentMissingFields.length > 0) {
-    els.subtitle.textContent = "Fill the missing required fields.";
-    els.statusBadge.textContent = "Missing Fields";
-    els.statusBadge.className = "badge warn";
     els.createButton.disabled = true;
     els.createButton.textContent = "Create Project";
-    setMessage("warning", "Fill the missing required fields above. Picklist fields must be selected from the dropdown.");
+    setMessage("", "");
     return;
   }
 
   if (state.eligibleQuotes.length === 0) {
-    els.subtitle.textContent = "The Deal is ready, but no SO Number was found.";
-    els.statusBadge.textContent = "No SO";
-    els.statusBadge.className = "badge warn";
     els.createButton.disabled = true;
     els.createButton.textContent = "Create Project";
-    setMessage("warning", "Everything required is filled, but no related Sales Quote has a Sales Order Number. Create the Sales Order first, then recheck the Deal.");
+    setMessage("error", "No related Sales Quote has a Sales Order Number. Create the Sales Order first, then recheck the Deal.");
     return;
   }
 
   if (!state.selectedQuoteId) {
-    els.subtitle.textContent = "Everything required is here. Select an SO Number.";
-    els.statusBadge.textContent = "Select SO";
-    els.statusBadge.className = "badge warn";
     els.createButton.disabled = true;
     els.createButton.textContent = state.actualMissingFields.length > 0 ? "Save & Create Project" : "Create Project";
-    setMessage("info", "Select the Sales Order Number to use for the project name, then create the project.");
+    setMessage("", "");
     return;
   }
 
-  const selectedQuote = state.eligibleQuotes.find(q => q.id === state.selectedQuoteId);
-  els.subtitle.textContent = state.actualMissingFields.length > 0 ? "Ready to save missing fields and create the project." : "Everything required is here.";
-  els.statusBadge.textContent = "Ready";
-  els.statusBadge.className = "badge good";
   els.createButton.disabled = !canCreateProject();
   els.createButton.textContent = state.actualMissingFields.length > 0 ? "Save & Create Project" : "Create Project";
-  setMessage("success", `Ready to create project from ${normalize(selectedQuote?.[cfg.quoteSoNumberField])}.`);
+  setMessage("", "");
 }
 
 function render() {
@@ -502,6 +544,7 @@ async function saveEditableDealFieldsIfNeeded() {
 }
 
 async function createProject() {
+  let createdProject = false;
   validateDeal();
 
   if (!canCreateProject()) {
@@ -511,6 +554,7 @@ async function createProject() {
 
   setBusy(true);
   els.createButton.disabled = true;
+  els.createButton.textContent = "Creating...";
 
   try {
     if (state.actualMissingFields.length > 0) {
@@ -526,7 +570,7 @@ async function createProject() {
     const selectedQuote = state.eligibleQuotes.find(q => q.id === state.selectedQuoteId);
     const salesOrderNumber = normalize(selectedQuote?.[cfg.quoteSoNumberField]);
 
-    setMessage("info", "Creating the Project...");
+    setMessage("", "");
 
     const response = await ZOHO.CRM.FUNCTIONS.execute(cfg.createProjectFunctionName, {
       arguments: JSON.stringify({
@@ -538,23 +582,31 @@ async function createProject() {
 
     debug({ functionResponse: response });
 
-    let details = response;
-    if (response?.details?.output) {
-      details = typeof response.details.output === "string" ? JSON.parse(response.details.output) : response.details.output;
+    const details = parseFunctionResult(response);
+
+    if (!details || details.success !== true) {
+      throw new Error(details?.message || "The Project was not created.");
     }
 
-    if (details.success === false) {
-      throw new Error(details.message || "The Project was not created.");
-    }
+    const projectName = details.project_name ? ` ${details.project_name}` : "";
+    setMessage("success", details.message || `Project created successfully.${projectName}`);
+    createdProject = true;
+    state.projectCreated = true;
+    els.createButton.textContent = "Project Created";
+    els.createButton.disabled = true;
+    els.refreshButton.disabled = true;
 
-    setMessage("success", details.message || "Project created successfully.");
-    els.statusBadge.textContent = "Created";
-    els.statusBadge.className = "badge good";
+    closeWidgetAfterSuccess();
   } catch (error) {
     setMessage("error", error.message || "Error creating Project.");
     els.createButton.disabled = false;
+    els.createButton.textContent = state.actualMissingFields.length > 0 ? "Save & Create Project" : "Create Project";
   } finally {
-    setBusy(false);
+    state.isBusy = false;
+    if (!createdProject) {
+      els.refreshButton.disabled = false;
+      updateCreateButtonStateOnly();
+    }
   }
 }
 
