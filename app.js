@@ -397,7 +397,9 @@ function renderSalesOrders() {
   els.soHelp.textContent = `${state.eligibleQuotes.length} related Sales Quote(s) with SO Number found.`;
 }
 
-function canCreateProject() {
+function canCreateProject(options = {}) {
+  const ignoreBusy = options.ignoreBusy === true;
+
   return Boolean(
     state.deal &&
     state.isInstall &&
@@ -405,7 +407,7 @@ function canCreateProject() {
     state.readOnlyMissingFields.length === 0 &&
     state.eligibleQuotes.length > 0 &&
     state.selectedQuoteId &&
-    !state.isBusy &&
+    (ignoreBusy || !state.isBusy) &&
     !state.projectCreated
   );
 }
@@ -598,7 +600,7 @@ async function createProject() {
       await saveEditableDealFieldsIfNeeded();
       validateDeal();
 
-      if (!canCreateProject()) {
+      if (!canCreateProject({ ignoreBusy: true })) {
         render();
         throw new Error("The Deal was saved, but it still is not ready to create a Project. Recheck the required fields and SO Number.");
       }
