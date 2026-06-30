@@ -1,24 +1,15 @@
 # Zoho Project Widget
 
-GitHub Pages hosted Zoho CRM widget for creating Zoho Projects from CRM Deals.
+GitHub Pages files for the CRM Deal -> Zoho Projects creation widget.
 
-## Confirmed setup
-
-- CRM module: Deals
-- Related Sales Quotes list: Quotes
-- SO Number field on Sales Quotes: Sales_Order_Number
-- CRM function name: create_project
-- Zoho Projects portal ID: 724354547
-- Project template ID: 1684307000011024001
-- Projects connection name in Deluge: projects
-- Project name format: SO - [Sales_Order_Number] [Deal_Name]
-
-## Files
+Upload these files to the root of the GitHub repo:
 
 - index.html
-- config.js
 - app.js
+- config.js
 - style.css
-- create_project.deluge
+- README.md
 
-Upload index.html, config.js, app.js, and style.css to GitHub Pages. Create the Deluge function separately in Zoho CRM using create_project.deluge.
+This version renders picklist fields as dropdowns using the explicit choices in config.js first, then falls back to Zoho CRM field metadata if no options are configured.
+
+Do not upload any Deluge function files to GitHub. The create_project Deluge function stays inside Zoho CRM.

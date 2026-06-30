@@ -118,25 +118,29 @@ async function loadFieldMetadata() {
 }
 
 function getPicklistOptions(field) {
-  const meta = state.fieldMeta[field.apiName];
   const options = [];
 
+  // Use the explicit choices in config.js first. This keeps the widget locked to
+  // the exact choices we want instead of falling back to a free-text input.
+  if (Array.isArray(field.options)) {
+    field.options.forEach(option => {
+      if (typeof option === "string") {
+        options.push({ value: option, label: option });
+      } else if (option && option.value) {
+        options.push({ value: String(option.value), label: String(option.label || option.value) });
+      }
+    });
+  }
+
+  if (options.length > 0) return options;
+
+  const meta = state.fieldMeta[field.apiName];
   if (Array.isArray(meta?.pick_list_values)) {
     meta.pick_list_values.forEach(option => {
       const value = option.actual_value || option.display_value || option.sequence_number;
       const label = option.display_value || option.actual_value || value;
       if (value !== undefined && value !== null && value !== "") {
         options.push({ value: String(value), label: String(label) });
-      }
-    });
-  }
-
-  if (options.length === 0 && Array.isArray(field.options)) {
-    field.options.forEach(option => {
-      if (typeof option === "string") {
-        options.push({ value: option, label: option });
-      } else if (option && option.value) {
-        options.push({ value: option.value, label: option.label || option.value });
       }
     });
   }
