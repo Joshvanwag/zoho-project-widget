@@ -531,6 +531,23 @@ async function loadRelatedQuotes() {
   }
 }
 
+function buildFieldValuesPayload() {
+  // Pass the widget's current view of every editable required field straight
+  // to the create_project function. This avoids a race where the function's
+  // own zoho.crm.getRecordById read happens before CRM has finished
+  // propagating a field we just saved, which was causing "not ready" errors
+  // on the same save that just wrote the last missing field.
+  const payload = {};
+
+  cfg.requiredFields.forEach(field => {
+    if (!fieldIsEditable(field)) return;
+    const value = getCurrentFieldValue(field.apiName);
+    payload[field.apiName] = typeof value === "string" ? value.trim() : value;
+  });
+
+  return payload;
+}
+
 function collectEditableDealFieldUpdates() {
   const payload = {};
 
@@ -608,6 +625,7 @@ async function createProject() {
 
     const selectedQuote = state.eligibleQuotes.find(q => q.id === state.selectedQuoteId);
     const salesOrderNumber = normalize(selectedQuote?.[cfg.quoteSoNumberField]);
+    const fieldValues = buildFieldValuesPayload();
 
     setMessage("", "");
 
@@ -615,7 +633,8 @@ async function createProject() {
       arguments: JSON.stringify({
         deal_id: state.dealId,
         quote_id: state.selectedQuoteId,
-        sales_order_number: salesOrderNumber
+        sales_order_number: salesOrderNumber,
+        field_values: fieldValues
       })
     });
 
