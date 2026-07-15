@@ -49,7 +49,7 @@ window.PROJECT_WIDGET_CONFIG = {
     { apiName: "pre_wire_date", label: "Pre-Wire Date", type: "date", source: "project", required: false, editable: true },
     { apiName: "proposed_start_date", label: "Proposed Start Date", type: "date", source: "project", required: false, editable: true },
     { apiName: "sow_and_ld_information", label: "Line Drawing Information", type: "textarea", source: "project", required: false, editable: true },
-    { apiName: "cad", label: "CAD NEEDED", type: "multipicklist", source: "project", required: false, editable: true, options: ["CAD NEEDED"] }
+    { apiName: "cad", label: "CAD Needed", type: "multipicklist", source: "project", required: false, editable: true, options: ["CAD NEEDED"] }
   ],
 
   showDebug: false,

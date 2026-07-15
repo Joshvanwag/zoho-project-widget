@@ -284,12 +284,48 @@ function validateDeal() {
   );
 }
 
+// A multipicklist with exactly one option (e.g. "CAD NEEDED") is really just a
+// yes/no flag. Rendering it as a native <select multiple> is confusing, so we
+// treat it like a toggle switch instead, while still capturing/sending the
+// value as an array so create_project_updated.deluge doesn't need to change.
+function isSingleOptionToggle(field) {
+  return field.type === "multipicklist" && getPicklistOptions(field).length === 1;
+}
+
 function renderFields() {
   els.fieldContainer.innerHTML = "";
 
-  state.visibleFields.forEach(field => {
+  // Required fields are grouped and shown first so the user always sees what
+  // they must fill in before scrolling to optional/informational fields.
+  // Array.prototype.sort is stable, so ties preserve the original config order.
+  const orderedFields = [...state.visibleFields].sort((a, b) => {
+    return (a.required === true ? 0 : 1) - (b.required === true ? 0 : 1);
+  });
+
+  let hasRenderedRequiredLabel = false;
+  let hasRenderedOptionalLabel = false;
+
+  orderedFields.forEach(field => {
+    if (field.required === true && !hasRenderedRequiredLabel) {
+      const groupLabel = document.createElement("div");
+      groupLabel.className = "required-group-label";
+      groupLabel.textContent = "Required";
+      els.fieldContainer.appendChild(groupLabel);
+      hasRenderedRequiredLabel = true;
+    } else if (field.required !== true && !hasRenderedOptionalLabel && hasRenderedRequiredLabel) {
+      const groupLabel = document.createElement("div");
+      groupLabel.className = "optional-group-label";
+      groupLabel.textContent = "Additional details";
+      els.fieldContainer.appendChild(groupLabel);
+      hasRenderedOptionalLabel = true;
+    }
+
     const row = document.createElement("div");
     row.className = "field-row";
+    if (field.required === true) row.classList.add("required-field");
+
+    const isToggle = field.type === "checkbox" || isSingleOptionToggle(field);
+    const isDisabled = !fieldIsEditable(field);
 
     const label = document.createElement("label");
     label.setAttribute("for", field.apiName);
@@ -302,11 +338,28 @@ function renderFields() {
     }
 
     let input;
-    const isDisabled = !fieldIsEditable(field);
 
-    if (field.type === "textarea") {
+    if (isToggle) {
+      // Build a styled toggle switch: a visually-hidden checkbox plus a
+      // slider span, wrapped together so a single <label> click toggles it.
+      input = document.createElement("input");
+      input.type = "checkbox";
+
+      const toggleWrap = document.createElement("label");
+      toggleWrap.className = "toggle-switch";
+
+      const slider = document.createElement("span");
+      slider.className = "toggle-slider";
+
+      toggleWrap.appendChild(input);
+      toggleWrap.appendChild(slider);
+
+      row.className += " toggle-row";
+      input._toggleWrap = toggleWrap;
+    } else if (field.type === "textarea") {
       input = document.createElement("textarea");
       input.rows = 4;
+      row.classList.add("span-2");
     } else if (field.type === "picklist" || field.type === "multipicklist") {
       input = document.createElement("select");
       if (field.type === "multipicklist") input.multiple = true;
@@ -321,32 +374,44 @@ function renderFields() {
         option.textContent = optionData.label;
         input.appendChild(option);
       });
-    } else if (field.type === "checkbox") {
-      input = document.createElement("input");
-      input.type = "checkbox";
     } else {
       input = document.createElement("input");
       if (field.type === "date") input.type = "date";
       else if (["currency", "decimal", "number"].includes(field.type)) input.type = "number";
       else input.type = "text";
+
+      if (["Description", "Description_of_Work_2", "Work_Site_Address"].includes(field.apiName)) {
+        row.classList.add("span-2");
+      }
     }
 
     input.id = field.apiName;
     input.name = field.apiName;
     const currentValue = getCurrentConfiguredValue(field);
+
     if (field.type === "checkbox") {
       input.checked = currentValue === true || String(currentValue).toLowerCase() === "true" || String(currentValue).toLowerCase() === "yes";
+    } else if (isSingleOptionToggle(field)) {
+      const toggleOptionValue = getPicklistOptions(field)[0].value;
+      input.checked = Array.isArray(currentValue) && currentValue.includes(toggleOptionValue);
     } else if (field.type === "multipicklist" && Array.isArray(currentValue)) {
       Array.from(input.options).forEach(option => { option.selected = currentValue.includes(option.value); });
     } else {
       input.value = displayValue(currentValue);
     }
+
     input.disabled = isDisabled || state.isBusy;
-    input.placeholder = input.disabled ? "Edit this field on the Deal record" : `Enter ${field.label}`;
+    if (!isToggle) {
+      input.placeholder = input.disabled ? "Edit this field on the Deal record" : `Enter ${field.label}`;
+    }
 
     if (!isDisabled) {
       const captureValue = event => {
         if (field.type === "checkbox") return event.target.checked;
+        if (isSingleOptionToggle(field)) {
+          const toggleOptionValue = getPicklistOptions(field)[0].value;
+          return event.target.checked ? [toggleOptionValue] : [];
+        }
         if (field.type === "multipicklist") return Array.from(event.target.selectedOptions).map(option => option.value).filter(Boolean);
         return event.target.value;
       };
@@ -371,13 +436,13 @@ function renderFields() {
     }
 
     row.appendChild(label);
-    row.appendChild(input);
+    row.appendChild(isToggle ? input._toggleWrap : input);
 
     if (isDisabled) {
       const note = document.createElement("small");
       note.textContent = "This field must be edited on the Deal record.";
       row.appendChild(note);
-    } else if (["picklist", "multipicklist"].includes(field.type) && getPicklistOptions(field).length === 0) {
+    } else if (["picklist", "multipicklist"].includes(field.type) && !isToggle && getPicklistOptions(field).length === 0) {
       const note = document.createElement("small");
       note.textContent = "Picklist options could not be loaded.";
       row.appendChild(note);

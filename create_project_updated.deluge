@@ -9,26 +9,29 @@ try
 		result.put("message","Missing arguments.");
 		return result.toString();
 	}
+
 	args = arguments.toMap();
 	dealId = ifnull(args.get("deal_id"),"");
 	quoteId = ifnull(args.get("quote_id"),"");
 	selectedSONumber = ifnull(args.get("sales_order_number"),"");
-	// Values the widget already has in hand (typed/selected this session).
-	// These take priority over the fresh CRM read below for the fields the
-	// widget can edit, since CRM can be slow to propagate a save that just
-	// happened seconds earlier. This is what fixes the "not ready" error on
-	// the same save that fills the last missing field.
+
 	fieldValuesArg = args.get("field_values");
 	if(fieldValuesArg == null)
 	{
 		fieldValuesArg = Map();
 	}
+
 	portalId = "724354547";
 	projectTemplateId = "1684307000013002547";
+	projectLayoutId = "1684307000004725041";
+	kickoffStatusId = "1684307000007196436";
+	ungroupedProjectGroupId = "1684307000000018001";
+
 	// Josh Van Wagenen in Zoho Projects.
 	joshZpuid = "1684307000015406166";
 	joshZuid = "903101142";
 	joshEmail = "joshv@goclearvista.com";
+
 	if(dealId == "")
 	{
 		result = Map();
@@ -36,6 +39,7 @@ try
 		result.put("message","Missing Deal ID.");
 		return result.toString();
 	}
+
 	if(quoteId == "")
 	{
 		result = Map();
@@ -43,6 +47,7 @@ try
 		result.put("message","Missing selected Sales Quote.");
 		return result.toString();
 	}
+
 	if(selectedSONumber == "")
 	{
 		result = Map();
@@ -50,7 +55,9 @@ try
 		result.put("message","Missing Sales Order Number.");
 		return result.toString();
 	}
+
 	deal = zoho.crm.getRecordById("Deals",dealId);
+
 	if(deal == null || deal.isEmpty())
 	{
 		result = Map();
@@ -58,7 +65,9 @@ try
 		result.put("message","Could not load the Deal.");
 		return result.toString();
 	}
+
 	quote = zoho.crm.getRecordById("Quotes",quoteId);
+
 	if(quote == null || quote.isEmpty())
 	{
 		result = Map();
@@ -66,7 +75,9 @@ try
 		result.put("message","Could not load the selected Sales Quote.");
 		return result.toString();
 	}
+
 	quoteSONumber = ifnull(quote.get("Sales_Order_Number"),"");
+
 	if(quoteSONumber == "")
 	{
 		result = Map();
@@ -74,6 +85,7 @@ try
 		result.put("message","The selected Sales Quote does not have a Sales Order Number.");
 		return result.toString();
 	}
+
 	if(quoteSONumber != selectedSONumber)
 	{
 		result = Map();
@@ -81,7 +93,9 @@ try
 		result.put("message","The selected SO Number no longer matches the Sales Quote. Recheck the Deal and try again.");
 		return result.toString();
 	}
+
 	quoteDeal = quote.get("Deal_Name");
+
 	if(quoteDeal != null)
 	{
 		if(quoteDeal.get("id") != null)
@@ -95,45 +109,129 @@ try
 			}
 		}
 	}
-	// These fields are read-only in the widget, so a fresh CRM value is
-	// always correct here -- there is no race to guard against for them.
+
 	dealName = ifnull(deal.get("Deal_Name"),"");
 	dealType = ifnull(deal.get("Deal_Type"),"");
 	contactLookup = deal.get("Contact_Name");
 	amountRaw = ifnull(deal.get("Amount"),"");
-	address2 = ifnull(fieldValuesArg.get("Work_Site_Address_2"),ifnull(deal.get("Work_Site_Address_2"),""));
-	programmingRequiredRaw = ifnull(fieldValuesArg.get("Programming_Required"),ifnull(deal.get("Programming_Required"),false));
-	programmingInformation = ifnull(fieldValuesArg.get("Programming"),ifnull(deal.get("Programming"),""));
-	powerElectrical = ifnull(fieldValuesArg.get("Power_Electrical"),ifnull(deal.get("Power_Electrical"),""));
-	billingException = ifnull(fieldValuesArg.get("Billing_Exception"),ifnull(deal.get("Billing_Exception"),""));
-	// These fields are editable in the widget. Prefer the value the widget
-	// just sent us (field_values) and only fall back to the CRM read if it
-	// was not sent, so we never fail readiness on a value that CRM simply
-	// has not finished echoing back yet.
-	descriptionOfWork = ifnull(fieldValuesArg.get("Description"),ifnull(deal.get("Description"),""));
-	internalWork = ifnull(fieldValuesArg.get("Description_of_Work_2"),ifnull(deal.get("Description_of_Work_2"),""));
-	slaLevel = ifnull(fieldValuesArg.get("SLA_Level"),ifnull(deal.get("SLA_Level"),""));
-	billingTerms = ifnull(fieldValuesArg.get("Payment_Schedule"),ifnull(deal.get("Payment_Schedule"),""));
-	buildingName = ifnull(fieldValuesArg.get("Building_Name"),ifnull(deal.get("Building_Name"),""));
-	roomName = ifnull(fieldValuesArg.get("Room_Name"),ifnull(deal.get("Room_Name"),""));
-	address1 = ifnull(fieldValuesArg.get("Work_Site_Address"),ifnull(deal.get("Work_Site_Address"),""));
-	city = ifnull(fieldValuesArg.get("Work_Site_City"),ifnull(deal.get("Work_Site_City"),""));
-	stateSelection = ifnull(fieldValuesArg.get("D_State_Selection"),ifnull(deal.get("D_State_Selection"),""));
-	zip = ifnull(fieldValuesArg.get("Work_City_Zip_Code"),ifnull(deal.get("Work_City_Zip_Code"),""));
-	installHoursRaw = ifnull(fieldValuesArg.get("Installation_Hours"),ifnull(deal.get("Installation_Hours"),""));
-	programmingHoursRaw = ifnull(fieldValuesArg.get("Programming_Hours"),ifnull(deal.get("Programming_Hours"),""));
-	scheduleExpectation = ifnull(fieldValuesArg.get("Schedule_Expectation"),ifnull(deal.get("Schedule_Expectation"),""));
-	workSiteState = ifnull(fieldValuesArg.get("Work_City_State"),ifnull(deal.get("Work_City_State"),""));
-	tentativeInstallDate = ifnull(fieldValuesArg.get("Tentative_Install_Dat"),ifnull(deal.get("Tentative_Install_Dat"),""));
-	completionDate = ifnull(fieldValuesArg.get("Project_Completion_Date"),ifnull(deal.get("Project_Completion_Date"),""));
+
+	descriptionOfWork = ifnull(
+		fieldValuesArg.get("Description"),
+		ifnull(deal.get("Description"),"")
+	);
+
+	internalWork = ifnull(
+		fieldValuesArg.get("Description_of_Work_2"),
+		ifnull(deal.get("Description_of_Work_2"),"")
+	);
+
+	slaLevel = ifnull(
+		fieldValuesArg.get("SLA_Level"),
+		ifnull(deal.get("SLA_Level"),"")
+	);
+
+	billingTerms = ifnull(
+		fieldValuesArg.get("Payment_Schedule"),
+		ifnull(deal.get("Payment_Schedule"),"")
+	);
+
+	billingException = ifnull(
+		fieldValuesArg.get("Billing_Exception"),
+		ifnull(deal.get("Billing_Exception"),"")
+	);
+
+	buildingName = ifnull(
+		fieldValuesArg.get("Building_Name"),
+		ifnull(deal.get("Building_Name"),"")
+	);
+
+	roomName = ifnull(
+		fieldValuesArg.get("Room_Name"),
+		ifnull(deal.get("Room_Name"),"")
+	);
+
+	address1 = ifnull(
+		fieldValuesArg.get("Work_Site_Address"),
+		ifnull(deal.get("Work_Site_Address"),"")
+	);
+
+	address2 = ifnull(
+		fieldValuesArg.get("Work_Site_Address_2"),
+		ifnull(deal.get("Work_Site_Address_2"),"")
+	);
+
+	city = ifnull(
+		fieldValuesArg.get("Work_Site_City"),
+		ifnull(deal.get("Work_Site_City"),"")
+	);
+
+	workSiteState = ifnull(
+		fieldValuesArg.get("Work_City_State"),
+		ifnull(deal.get("Work_City_State"),"")
+	);
+
+	stateSelection = ifnull(
+		fieldValuesArg.get("D_State_Selection"),
+		ifnull(deal.get("D_State_Selection"),"")
+	);
+
+	zip = ifnull(
+		fieldValuesArg.get("Work_City_Zip_Code"),
+		ifnull(deal.get("Work_City_Zip_Code"),"")
+	);
+
+	installHoursRaw = ifnull(
+		fieldValuesArg.get("Installation_Hours"),
+		ifnull(deal.get("Installation_Hours"),"")
+	);
+
+	programmingHoursRaw = ifnull(
+		fieldValuesArg.get("Programming_Hours"),
+		ifnull(deal.get("Programming_Hours"),"")
+	);
+
+	scheduleExpectation = ifnull(
+		fieldValuesArg.get("Schedule_Expectation"),
+		ifnull(deal.get("Schedule_Expectation"),"")
+	);
+
+	programmingRequiredRaw = ifnull(
+		fieldValuesArg.get("Programming_Required"),
+		ifnull(deal.get("Programming_Required"),false)
+	);
+
+	programmingInformation = ifnull(
+		fieldValuesArg.get("Programming"),
+		ifnull(deal.get("Programming"),"")
+	);
+
+	powerElectrical = ifnull(
+		fieldValuesArg.get("Power_Electrical"),
+		ifnull(deal.get("Power_Electrical"),"")
+	);
+
+	tentativeInstallDate = ifnull(
+		fieldValuesArg.get("Tentative_Install_Dat"),
+		ifnull(deal.get("Tentative_Install_Dat"),"")
+	);
+
+	completionDate = ifnull(
+		fieldValuesArg.get("Project_Completion_Date"),
+		ifnull(deal.get("Project_Completion_Date"),"")
+	);
+
+	// Project-only widget fields.
 	preWireDate = ifnull(fieldValuesArg.get("pre_wire_date"),"");
 	proposedStartDate = ifnull(fieldValuesArg.get("proposed_start_date"),"");
 	lineDrawingInformation = ifnull(fieldValuesArg.get("sow_and_ld_information"),"");
+
 	cadNeeded = fieldValuesArg.get("cad");
+
 	if(cadNeeded == null)
 	{
 		cadNeeded = List();
 	}
+
 	if(dealType != "Install Deal")
 	{
 		result = Map();
@@ -141,59 +239,74 @@ try
 		result.put("message","This Deal Type is not Install Deal.");
 		return result.toString();
 	}
+
 	missing = List();
+
 	if(dealName == "")
 	{
 		missing.add("Deal Name");
 	}
+
 	if(contactLookup == null)
 	{
 		missing.add("Primary Contact");
 	}
+
 	if(internalWork == "")
 	{
 		missing.add("Technical Scope (INTERNAL)");
 	}
+
 	if(slaLevel == "")
 	{
 		missing.add("SLA Level");
 	}
+
 	if(programmingInformation == "")
 	{
 		missing.add("Programming Information");
 	}
+
 	if(amountRaw == "")
 	{
 		missing.add("Project $ Amount");
 	}
+
 	if(billingTerms == "")
 	{
 		missing.add("Billing Terms");
 	}
+
 	if(address1 == "")
 	{
 		missing.add("Work Site Address");
 	}
+
 	if(city == "")
 	{
 		missing.add("Work Site City");
 	}
+
 	if(zip == "")
 	{
 		missing.add("Work Site Zip");
 	}
+
 	if(installHoursRaw == "")
 	{
 		missing.add("Installation Hours");
 	}
+
 	if(programmingHoursRaw == "")
 	{
 		missing.add("Programming Hours");
 	}
+
 	if(scheduleExpectation == "")
 	{
 		missing.add("Schedule Expectation");
 	}
+
 	if(missing.size() > 0)
 	{
 		result = Map();
@@ -201,39 +314,46 @@ try
 		result.put("message","Missing required fields: " + missing.toString());
 		return result.toString();
 	}
-	// CRM and Projects use slightly different text for this corresponding picklist value.
+
+	// CRM and Projects use slightly different text for this corresponding value.
 	if(billingTerms == "BILL:50-50 (Project timeline less than 30 days)")
 	{
 		billingTerms = "BILL:50-50 (Project timeline less than 30days)";
 	}
+
 	amount = 0.0;
 	installHours = 0.0;
 	programmingHours = 0.0;
-	try 
+
+	try
 	{
 		amount = amountRaw.toDecimal();
 	}
-	catch (amountErr)
+	catch(amountErr)
 	{
 		amount = 0.0;
 	}
-	try 
+
+	try
 	{
 		installHours = installHoursRaw.toDecimal();
 	}
-	catch (installErr)
+	catch(installErr)
 	{
 		installHours = 0.0;
 	}
-	try 
+
+	try
 	{
 		programmingHours = programmingHoursRaw.toDecimal();
 	}
-	catch (programmingErr)
+	catch(programmingErr)
 	{
 		programmingHours = 0.0;
 	}
+
 	programmingRequired = false;
+
 	if(programmingRequiredRaw == true)
 	{
 		programmingRequired = true;
@@ -241,83 +361,126 @@ try
 	else
 	{
 		programmingRequiredText = programmingRequiredRaw.toString().toLowerCase();
-		if(programmingRequiredText == "true" || programmingRequiredText == "yes")
+
+		if(
+			programmingRequiredText == "true" ||
+			programmingRequiredText == "yes"
+		)
 		{
 			programmingRequired = true;
 		}
 	}
+
+	// Resolve primary-contact values from the actual CRM Contact record.
 	primaryContactName = "";
 	primaryContactEmail = "";
 	primaryContactPhone = "";
+
 	if(contactLookup != null)
 	{
 		if(contactLookup.get("id") != null)
 		{
-			contact = zoho.crm.getRecordById("Contacts",contactLookup.get("id"));
-			if(contact != null)
+			contact = zoho.crm.getRecordById(
+				"Contacts",
+				contactLookup.get("id")
+			);
+
+			if(contact != null && !contact.isEmpty())
 			{
-				if(!contact.isEmpty())
+				primaryContactName = ifnull(contact.get("Full_Name"),"");
+				primaryContactEmail = ifnull(contact.get("Email"),"");
+				primaryContactPhone = ifnull(contact.get("Phone"),"");
+
+				if(primaryContactPhone == "")
 				{
-					primaryContactName = ifnull(contact.get("Full_Name"),"");
-					primaryContactEmail = ifnull(contact.get("Email"),"");
-					primaryContactPhone = ifnull(contact.get("Phone"),"");
-					if(primaryContactPhone == "")
-					{
-						primaryContactPhone = ifnull(contact.get("Mobile"),"");
-					}
+					primaryContactPhone = ifnull(contact.get("Mobile"),"");
 				}
 			}
 		}
 	}
-	if(primaryContactName == "")
+
+	if(primaryContactName == "" && contactLookup != null)
 	{
-		if(contactLookup != null)
-		{
-			primaryContactName = ifnull(contactLookup.get("name"),"");
-		}
+		primaryContactName = ifnull(contactLookup.get("name"),"");
 	}
+
 	if(primaryContactEmail == "")
 	{
 		primaryContactEmail = "N/A";
 	}
+
 	if(primaryContactPhone == "")
 	{
 		primaryContactPhone = "N/A";
 	}
+
 	projectName = "SO - " + selectedSONumber + " " + dealName;
+
 	projectParams = Map();
 	projectParams.put("name",projectName);
+
+	// Copy the full Project Template, including its task structure.
 	projectParams.put("copy_from",projectTemplateId);
+
 	projectParams.put("description",descriptionOfWork);
-	projectParams.put("start_date",zoho.currentdate.toString("yyyy-MM-dd"));
+	projectParams.put(
+		"start_date",
+		zoho.currentdate.toString("yyyy-MM-dd")
+	);
 	projectParams.put("is_public_project",true);
-	projectParams.put("status","Kickoff");
-	groupMap = Map();
-	groupMap.put("name","Ungrouped Projects");
-	projectParams.put("group",groupMap);
-	// Keep this for the Project custom/integration field.
+
+	// Status: Kickoff.
+	statusMap = Map();
+	statusMap.put("id",kickoffStatusId);
+	projectParams.put("status",statusMap);
+
+	// Group: Ungrouped Projects.
+	projectGroupMap = Map();
+	projectGroupMap.put("id",ungroupedProjectGroupId);
+	projectParams.put("project_group",projectGroupMap);
+
+	// Layout: From Project Creation Form.
+	layoutMap = Map();
+	layoutMap.put("id",projectLayoutId);
+	projectParams.put("layout",layoutMap);
+
+	// CRM Deal association/integration field.
 	projectParams.put("deal_id",dealId);
-	// Project owner should be Josh.
+
+	// Project owner: Josh.
 	ownerMap = Map();
 	ownerMap.put("zpuid",joshZpuid);
 	ownerMap.put("zuid",joshZuid);
 	ownerMap.put("email",joshEmail);
 	projectParams.put("owner",ownerMap);
-	// Add the required internal users to every project.
+
+	// Add required internal users.
 	projectUsers = List();
-	userEmails = {"joshv@goclearvista.com","ryanl@goclearvista.com","chrisi@goclearvista.com","daltonp@goclearvista.com","bubba@goclearvista.com","sethb@goclearvista.com","mindyb@goclearvista.com","spencere@goclearvista.com"};
-	for each  userEmail in userEmails
+
+	userEmails =
+	{
+		"joshv@goclearvista.com",
+		"ryanl@goclearvista.com",
+		"chrisi@goclearvista.com",
+		"daltonp@goclearvista.com",
+		"bubba@goclearvista.com",
+		"sethb@goclearvista.com",
+		"mindyb@goclearvista.com",
+		"spencere@goclearvista.com"
+	};
+
+	for each userEmail in userEmails
 	{
 		userMap = Map();
 		userMap.put("email",userEmail);
 		projectUsers.add(userMap);
 	}
+
 	projectParams.put("users",projectUsers);
-	// V3 Project custom field API names.
+
+	// Project custom fields.
 	projectParams.put("project_amount",amount);
-	// Project Description of Work receives CRM Description.
 	projectParams.put("projects_cf_0005",descriptionOfWork);
-	// Project Description of Work (INTERNAL) receives CRM Technical Scope (INTERNAL).
 	projectParams.put("description_of_work",internalWork);
 	projectParams.put("sla_level",slaLevel);
 	projectParams.put("billing_terms",billingTerms);
@@ -339,32 +502,56 @@ try
 	projectParams.put("projects_cf_0003",installHours);
 	projectParams.put("projects_cf_0004",programmingHours);
 	projectParams.put("programming",programmingRequired);
+
 	if(tentativeInstallDate != "")
 	{
-		projectParams.put("tentative_install_date",tentativeInstallDate);
+		projectParams.put(
+			"tentative_install_date",
+			tentativeInstallDate
+		);
 	}
+
 	if(completionDate != "")
 	{
-		projectParams.put("completion_date",completionDate);
+		projectParams.put(
+			"completion_date",
+			completionDate
+		);
 	}
+
 	if(preWireDate != "")
 	{
-		projectParams.put("pre_wire_date",preWireDate);
+		projectParams.put(
+			"pre_wire_date",
+			preWireDate
+		);
 	}
+
 	if(proposedStartDate != "")
 	{
-		projectParams.put("proposed_start_date",proposedStartDate);
+		projectParams.put(
+			"proposed_start_date",
+			proposedStartDate
+		);
 	}
+
 	if(lineDrawingInformation != "")
 	{
-		projectParams.put("sow_and_ld_information",lineDrawingInformation);
+		projectParams.put(
+			"sow_and_ld_information",
+			lineDrawingInformation
+		);
 	}
+
+	// CAD is a Projects multipicklist and must be submitted as a List.
 	if(cadNeeded != null && cadNeeded.size() > 0)
 	{
 		projectParams.put("cad",cadNeeded);
 	}
+
 	headersMap = Map();
 	headersMap.put("Content-Type","application/json");
+
 	createResponse = invokeurl
 	[
 		url :"https://projectsapi.zoho.com/api/v3/portal/" + portalId + "/projects"
@@ -373,81 +560,147 @@ try
 		headers:headersMap
 		connection:"projects"
 	];
+
 	if(createResponse == null)
 	{
 		result = Map();
 		result.put("success",false);
-		result.put("message","Zoho Projects did not return a response. The project was not confirmed.");
+		result.put(
+			"message",
+			"Zoho Projects did not return a response. The project was not confirmed."
+		);
 		return result.toString();
 	}
+
 	if(createResponse.containsKey("error"))
 	{
 		errorMessage = "Zoho Projects returned an error.";
 		errorObj = createResponse.get("error");
+
 		if(errorObj != null)
 		{
 			if(errorObj.containsKey("details"))
 			{
 				detailsList = errorObj.get("details");
+
 				if(detailsList != null && detailsList.size() > 0)
 				{
 					firstDetail = detailsList.get(0);
+
 					if(firstDetail != null)
 					{
-						errorMessage = ifnull(firstDetail.get("message"),errorMessage);
-						fieldName = ifnull(firstDetail.get("field_name"),"");
+						errorMessage = ifnull(
+							firstDetail.get("message"),
+							errorMessage
+						);
+
+						fieldName = ifnull(
+							firstDetail.get("field_name"),
+							""
+						);
+
 						if(fieldName != "")
 						{
-							errorMessage = errorMessage + " Field: " + fieldName;
+							errorMessage =
+								errorMessage +
+								" Field: " +
+								fieldName;
 						}
 					}
 				}
 			}
 			else if(errorObj.containsKey("title"))
 			{
-				errorMessage = ifnull(errorObj.get("title"),errorMessage);
+				errorMessage = ifnull(
+					errorObj.get("title"),
+					errorMessage
+				);
 			}
 		}
+
 		result = Map();
 		result.put("success",false);
 		result.put("message",errorMessage);
 		return result.toString();
 	}
+
 	projectId = ifnull(createResponse.get("id"),"");
 	projectKey = ifnull(createResponse.get("key"),"");
+
 	if(projectId == "")
 	{
 		result = Map();
 		result.put("success",false);
-		result.put("message","Zoho Projects did not return a Project ID. The project was not confirmed.");
+		result.put(
+			"message",
+			"Zoho Projects did not return a Project ID. The project was not confirmed."
+		);
 		return result.toString();
 	}
+
 	verifyResponse = invokeurl
 	[
 		url :"https://projectsapi.zoho.com/api/v3/portal/" + portalId + "/projects/" + projectId
 		type :GET
 		connection:"projects"
 	];
-	if(verifyResponse == null || verifyResponse.containsKey("error"))
+
+	if(
+		verifyResponse == null ||
+		verifyResponse.containsKey("error")
+	)
 	{
 		result = Map();
 		result.put("success",false);
-		result.put("message","Project may have been created, but Zoho Projects could not verify it.");
+		result.put(
+			"message",
+			"Project may have been created, but Zoho Projects could not verify it."
+		);
 		result.put("project_id",projectId);
 		result.put("project_key",projectKey);
 		result.put("project_name",projectName);
 		return result.toString();
 	}
+
+	// Verify that the source template generated tasks.
+	taskInfo = verifyResponse.get("tasks");
+	taskCount = 0;
+
+	if(taskInfo != null)
+	{
+		taskCount =
+			ifnull(taskInfo.get("open_count"),0) +
+			ifnull(taskInfo.get("closed_count"),0);
+	}
+
+	if(taskCount == 0)
+	{
+		result = Map();
+		result.put("success",false);
+		result.put(
+			"message",
+			"Project was created, but no template tasks were found."
+		);
+		result.put("project_id",projectId);
+		result.put("project_key",projectKey);
+		result.put("project_name",projectName);
+		return result.toString();
+	}
+
 	assocData = Map();
 	assocData.put("name",projectName);
 	assocData.put("project_id",projectId);
 	assocData.put("project_key",projectKey);
+
 	assocList = List();
 	assocList.add(assocData);
+
 	assocWrapper = Map();
 	assocWrapper.put("data",assocList);
+
 	assocHeaders = Map();
 	assocHeaders.put("Content-Type","application/json");
+
 	assocResponse = invokeurl
 	[
 		url :"https://www.zohoapis.com/crm/v2/Deals/" + dealId + "/Zoho_Projects/" + projectId
@@ -456,46 +709,70 @@ try
 		headers:assocHeaders
 		connection:"zcrm"
 	];
+
 	if(assocResponse == null)
 	{
 		result = Map();
 		result.put("success",false);
-		result.put("message","Project was created, but CRM did not return a response when linking it to the Deal.");
+		result.put(
+			"message",
+			"Project was created, but CRM did not return a response when linking it to the Deal."
+		);
 		result.put("project_id",projectId);
 		result.put("project_key",projectKey);
 		result.put("project_name",projectName);
 		return result.toString();
 	}
+
 	if(assocResponse.containsKey("code"))
 	{
 		assocCode = ifnull(assocResponse.get("code"),"");
+
 		if(assocCode != "" && assocCode != "SUCCESS")
 		{
-			assocMessage = ifnull(assocResponse.get("message"),"Project was created, but CRM association failed.");
+			assocMessage = ifnull(
+				assocResponse.get("message"),
+				"Project was created, but CRM association failed."
+			);
+
 			result = Map();
 			result.put("success",false);
-			result.put("message","Project was created, but CRM association failed: " + assocMessage);
+			result.put(
+				"message",
+				"Project was created, but CRM association failed: " +
+				assocMessage
+			);
 			result.put("project_id",projectId);
 			result.put("project_key",projectKey);
 			result.put("project_name",projectName);
 			return result.toString();
 		}
 	}
+
 	result = Map();
 	result.put("success",true);
-	result.put("message","Project created and linked successfully.");
+	result.put(
+		"message",
+		"Project created from template, verified, and linked successfully."
+	);
 	result.put("project_id",projectId);
 	result.put("project_key",projectKey);
 	result.put("project_name",projectName);
+	result.put("task_count",taskCount);
+
 	return result.toString();
 }
-catch (e)
+catch(e)
 {
 	result = Map();
 	result.put("success",false);
-	result.put("message","Project creation failed: " + e.toString());
+	result.put(
+		"message",
+		"Project creation failed: " + e.toString()
+	);
 	return result.toString();
 }
+
 finalResult = Map();
 finalResult.put("success",false);
 finalResult.put("message","Project creation failed.");

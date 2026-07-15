@@ -4,21 +4,27 @@
   background: #f3f4f6;
 }
 
+html, body {
+  height: 100%;
+}
+
 body {
   margin: 0;
 }
 
 .wrap {
-  padding: 24px;
+  padding: 28px;
+  min-height: 100vh;
+  box-sizing: border-box;
 }
 
 .card {
-  max-width: 780px;
+  max-width: 980px;
   margin: 0 auto;
   background: #ffffff;
   border: 1px solid #e5e7eb;
-  border-radius: 14px;
-  padding: 22px;
+  border-radius: 16px;
+  padding: 32px 36px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06);
 }
 
@@ -27,12 +33,12 @@ body {
   justify-content: space-between;
   gap: 16px;
   align-items: flex-start;
-  margin-bottom: 18px;
+  margin-bottom: 22px;
 }
 
 h1 {
   margin: 0;
-  font-size: 24px;
+  font-size: 28px;
 }
 
 h2 {
@@ -100,14 +106,73 @@ p {
   border-color: #fecaca;
 }
 
+/* Fields are laid out on a responsive 2-column grid so the extra width of the
+   bigger widget is put to use. Wide fields (textareas, addresses) span both
+   columns via the .span-2 class added in app.js. */
+.fields {
+  display: block;
+}
+
+#fieldContainer {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px 20px;
+}
+
+@media (max-width: 640px) {
+  #fieldContainer {
+    grid-template-columns: 1fr;
+  }
+}
+
 .field-row {
   display: grid;
   gap: 6px;
-  margin-bottom: 14px;
+  margin-bottom: 16px;
+  align-content: start;
+}
+
+.field-row.span-2 {
+  grid-column: 1 / -1;
+}
+
+/* Required fields get a subtle highlighted rail + tint so they stand out and
+   are easy to scan now that they're grouped at the top of the form. */
+.field-row.required-field {
+  position: relative;
+  padding: 10px 12px 10px 14px;
+  background: #fafbff;
+  border: 1px solid #e0e7ff;
+  border-left: 3px solid #4f46e5;
+  border-radius: 10px;
+  margin-bottom: 12px;
+}
+
+.required-group-label {
+  grid-column: 1 / -1;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #4f46e5;
+  margin: 4px 0 2px;
+}
+
+.optional-group-label {
+  grid-column: 1 / -1;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #6b7280;
+  margin: 18px 0 2px;
+  padding-top: 10px;
+  border-top: 1px solid #e5e7eb;
 }
 
 label {
   font-weight: 700;
+  font-size: 14px;
 }
 
 .required-star {
@@ -118,10 +183,20 @@ input,
 textarea {
   width: 100%;
   box-sizing: border-box;
-  padding: 10px 12px;
+  padding: 11px 13px;
   border: 1px solid #d1d5db;
   border-radius: 8px;
   font: inherit;
+  font-size: 14px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+  outline: none;
+  border-color: #4f46e5;
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.15);
 }
 
 input:disabled,
@@ -138,22 +213,36 @@ small {
   display: flex;
   justify-content: flex-end;
   gap: 10px;
-  margin-top: 20px;
+  margin-top: 24px;
 }
 
 button {
   border: 0;
   border-radius: 9px;
-  padding: 10px 16px;
+  padding: 11px 18px;
   font-weight: 700;
+  font-size: 14px;
   cursor: pointer;
   background: #2563eb;
   color: white;
+  transition: background 0.15s ease, transform 0.05s ease;
+}
+
+button:hover:not(:disabled) {
+  background: #1d4ed8;
+}
+
+button:active:not(:disabled) {
+  transform: translateY(1px);
 }
 
 button.secondary {
   background: #e5e7eb;
   color: #111827;
+}
+
+button.secondary:hover:not(:disabled) {
+  background: #d1d5db;
 }
 
 button:disabled {
@@ -174,19 +263,156 @@ button:disabled {
   overflow: auto;
 }
 
+/* --- Select / picklist dropdowns --- */
 select {
   width: 100%;
   box-sizing: border-box;
-  padding: 10px 12px;
+  padding: 11px 36px 11px 13px;
   border: 1px solid #d1d5db;
   border-radius: 8px;
   font: inherit;
-  background: #ffffff;
+  font-size: 14px;
+  background-color: #ffffff;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 20 20' fill='none'><path d='M5.5 7.5L10 12L14.5 7.5' stroke='%236B7280' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  background-size: 20px 20px;
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+select:hover:not(:disabled) {
+  border-color: #a5b4fc;
 }
 
 select:disabled {
-  background: #f3f4f6;
+  background-color: #f3f4f6;
   color: #6b7280;
+  cursor: not-allowed;
+}
+
+select[multiple] {
+  appearance: auto;
+  -webkit-appearance: auto;
+  background-image: none;
+  padding: 8px;
+  min-height: 84px;
+  cursor: pointer;
+}
+
+/* --- Date pickers --- */
+input[type="date"] {
+  cursor: pointer;
+  padding: 10px 13px;
+  background: #ffffff;
+  color: #1f2937;
+}
+
+input[type="date"]:hover:not(:disabled) {
+  border-color: #a5b4fc;
+  background: #f8f9ff;
+}
+
+/* Enlarge and restyle the calendar icon so it's an obvious, easy-to-hit
+   click target with a pointer/hand cursor on hover. */
+input[type="date"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  padding: 6px;
+  margin-left: 6px;
+  border-radius: 6px;
+  opacity: 0.75;
+  transition: opacity 0.15s ease, background 0.15s ease;
+  filter: invert(28%) sepia(80%) saturate(1800%) hue-rotate(226deg) brightness(95%);
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
+  background: #eef2ff;
+}
+
+input[type="date"]:disabled::-webkit-calendar-picker-indicator {
+  cursor: not-allowed;
+  filter: invert(60%);
+  opacity: 0.4;
+}
+
+/* --- Checkbox + toggle-switch controls (Programming Required, CAD Needed) --- */
+.field-row.toggle-row {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  background: #f9fafb;
+}
+
+.field-row.toggle-row small {
+  flex-basis: 100%;
+}
+
+.field-row.toggle-row label {
+  margin: 0;
+}
+
+.toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 46px;
+  height: 26px;
+  flex: 0 0 auto;
+  cursor: pointer;
+}
+
+.toggle-switch input[type="checkbox"] {
+  opacity: 0;
+  width: 0;
+  height: 0;
+  position: absolute;
+}
+
+.toggle-slider {
+  position: absolute;
+  inset: 0;
+  background: #d1d5db;
+  border-radius: 999px;
+  transition: background 0.15s ease;
+  cursor: pointer;
+}
+
+.toggle-slider::before {
+  content: "";
+  position: absolute;
+  height: 20px;
+  width: 20px;
+  left: 3px;
+  top: 3px;
+  background: #ffffff;
+  border-radius: 50%;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+  transition: transform 0.15s ease;
+}
+
+.toggle-switch input[type="checkbox"]:checked + .toggle-slider {
+  background: #4f46e5;
+}
+
+.toggle-switch input[type="checkbox"]:checked + .toggle-slider::before {
+  transform: translateX(20px);
+}
+
+.toggle-switch input[type="checkbox"]:disabled + .toggle-slider {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.toggle-switch input[type="checkbox"]:focus-visible + .toggle-slider {
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.25);
 }
 
 .so-section {
