@@ -8,8 +8,9 @@ const state = {
   quotes: [],
   eligibleQuotes: [],
   selectedQuoteId: "",
+  visibleFields: [],
   actualMissingFields: [],
-  currentMissingFields: [],
+  currentMissingRequiredFields: [],
   readOnlyMissingFields: [],
   isInstall: false,
   isBusy: false,
@@ -147,7 +148,7 @@ async function waitForSavedFieldsToBeVisible(payload) {
     state.deal = await fetchDealRecord();
     validateDeal();
 
-    if (savedPayloadIsVisibleOnDeal(payload) && state.currentMissingFields.length === 0) {
+    if (savedPayloadIsVisibleOnDeal(payload) && state.currentMissingRequiredFields.length === 0) {
       return;
     }
   }
@@ -245,29 +246,60 @@ function getPicklistOptions(field) {
   return options;
 }
 
+function fieldSource(field) {
+  return field.source || "deal";
+}
+
+function getCurrentConfiguredValue(field) {
+  if (Object.prototype.hasOwnProperty.call(state.draftValues, field.apiName)) {
+    return state.draftValues[field.apiName];
+  }
+  return fieldSource(field) === "deal" ? getDealFieldValue(field.apiName) : null;
+}
+
 function validateDeal() {
   const installValue = getCurrentFieldValue(cfg.installTypeField);
   state.isInstall = cfg.installAllowedValues.includes(normalize(installValue));
 
-  state.actualMissingFields = cfg.requiredFields.filter(field => valueIsEmpty(getDealFieldValue(field.apiName)));
-  state.currentMissingFields = cfg.requiredFields.filter(field => valueIsEmpty(getCurrentFieldValue(field.apiName)));
-  state.readOnlyMissingFields = state.actualMissingFields.filter(field => !fieldIsEditable(field) && valueIsEmpty(getDealFieldValue(field.apiName)));
+  const fields = cfg.fields || [];
+  state.visibleFields = fields.filter(field => {
+    if (field.showWhenBlank === false) return false;
+    if (fieldSource(field) === "project") return true;
+    return valueIsEmpty(getDealFieldValue(field.apiName));
+  });
+
+  state.actualMissingFields = fields.filter(field =>
+    fieldSource(field) === "deal" && valueIsEmpty(getDealFieldValue(field.apiName))
+  );
+
+  state.currentMissingRequiredFields = fields.filter(field =>
+    field.required === true && valueIsEmpty(getCurrentConfiguredValue(field))
+  );
+
+  state.readOnlyMissingFields = fields.filter(field =>
+    field.required === true &&
+    fieldSource(field) === "deal" &&
+    !fieldIsEditable(field) &&
+    valueIsEmpty(getDealFieldValue(field.apiName))
+  );
 }
 
 function renderFields() {
   els.fieldContainer.innerHTML = "";
 
-  state.actualMissingFields.forEach(field => {
+  state.visibleFields.forEach(field => {
     const row = document.createElement("div");
     row.className = "field-row";
 
     const label = document.createElement("label");
     label.setAttribute("for", field.apiName);
     label.appendChild(document.createTextNode(field.label + " "));
-    const star = document.createElement("span");
-    star.className = "required-star";
-    star.textContent = "*";
-    label.appendChild(star);
+    if (field.required === true) {
+      const star = document.createElement("span");
+      star.className = "required-star";
+      star.textContent = "*";
+      label.appendChild(star);
+    }
 
     let input;
     const isDisabled = !fieldIsEditable(field);
@@ -275,8 +307,9 @@ function renderFields() {
     if (field.type === "textarea") {
       input = document.createElement("textarea");
       input.rows = 4;
-    } else if (field.type === "picklist") {
+    } else if (field.type === "picklist" || field.type === "multipicklist") {
       input = document.createElement("select");
+      if (field.type === "multipicklist") input.multiple = true;
       const placeholder = document.createElement("option");
       placeholder.value = "";
       placeholder.textContent = `Select ${field.label}...`;
@@ -288,6 +321,9 @@ function renderFields() {
         option.textContent = optionData.label;
         input.appendChild(option);
       });
+    } else if (field.type === "checkbox") {
+      input = document.createElement("input");
+      input.type = "checkbox";
     } else {
       input = document.createElement("input");
       if (field.type === "date") input.type = "date";
@@ -297,37 +333,40 @@ function renderFields() {
 
     input.id = field.apiName;
     input.name = field.apiName;
-    input.value = displayValue(getCurrentFieldValue(field.apiName));
+    const currentValue = getCurrentConfiguredValue(field);
+    if (field.type === "checkbox") {
+      input.checked = currentValue === true || String(currentValue).toLowerCase() === "true" || String(currentValue).toLowerCase() === "yes";
+    } else if (field.type === "multipicklist" && Array.isArray(currentValue)) {
+      Array.from(input.options).forEach(option => { option.selected = currentValue.includes(option.value); });
+    } else {
+      input.value = displayValue(currentValue);
+    }
     input.disabled = isDisabled || state.isBusy;
     input.placeholder = input.disabled ? "Edit this field on the Deal record" : `Enter ${field.label}`;
 
     if (!isDisabled) {
+      const captureValue = event => {
+        if (field.type === "checkbox") return event.target.checked;
+        if (field.type === "multipicklist") return Array.from(event.target.selectedOptions).map(option => option.value).filter(Boolean);
+        return event.target.value;
+      };
+
       input.addEventListener("input", event => {
-        // Keep the draft value current while the user types, but do not rerender
-        // the form or update validation messages on every keystroke. This keeps
-        // focus/cursor stable and still lets the Create button become enabled
-        // as soon as the last required value is present.
-        state.draftValues[field.apiName] = event.target.value;
+        state.draftValues[field.apiName] = captureValue(event);
         validateDeal();
         updateCreateButtonStateOnly();
       });
 
       input.addEventListener("blur", () => {
-        // Show/update validation messaging only when the user leaves the field.
         validateDeal();
         renderStatus();
       });
 
       input.addEventListener("change", event => {
-        state.draftValues[field.apiName] = event.target.value;
+        state.draftValues[field.apiName] = captureValue(event);
         validateDeal();
-        if (field.type === "picklist") {
-          // Picklists are a deliberate selection, so updating the visible status
-          // immediately is helpful and does not cause typing/focus issues.
-          renderStatus();
-        } else {
-          updateCreateButtonStateOnly();
-        }
+        if (["picklist", "multipicklist", "checkbox"].includes(field.type)) renderStatus();
+        else updateCreateButtonStateOnly();
       });
     }
 
@@ -338,9 +377,9 @@ function renderFields() {
       const note = document.createElement("small");
       note.textContent = "This field must be edited on the Deal record.";
       row.appendChild(note);
-    } else if (field.type === "picklist" && getPicklistOptions(field).length === 0) {
+    } else if (["picklist", "multipicklist"].includes(field.type) && getPicklistOptions(field).length === 0) {
       const note = document.createElement("small");
-      note.textContent = "Picklist options could not be loaded from CRM metadata. Recheck the widget connection/settings.";
+      note.textContent = "Picklist options could not be loaded.";
       row.appendChild(note);
     }
 
@@ -403,7 +442,7 @@ function canCreateProject(options = {}) {
   return Boolean(
     state.deal &&
     state.isInstall &&
-    state.currentMissingFields.length === 0 &&
+    state.currentMissingRequiredFields.length === 0 &&
     state.readOnlyMissingFields.length === 0 &&
     state.eligibleQuotes.length > 0 &&
     state.selectedQuoteId &&
@@ -419,7 +458,7 @@ function updateCreateButtonStateOnly() {
   }
 
   els.createButton.disabled = !canCreateProject();
-  els.createButton.textContent = state.actualMissingFields.length > 0 ? "Save & Create Project" : "Create Project";
+  els.createButton.textContent = state.actualMissingFields.some(field => fieldIsEditable(field) && !valueIsEmpty(getCurrentConfiguredValue(field))) ? "Save & Create Project" : "Create Project";
 }
 
 function renderStatus() {
@@ -433,7 +472,7 @@ function renderStatus() {
     return;
   }
 
-  if (state.actualMissingFields.length > 0) {
+  if (state.visibleFields.length > 0) {
     els.fieldsForm.classList.remove("hidden");
   } else {
     els.fieldsForm.classList.add("hidden");
@@ -453,7 +492,7 @@ function renderStatus() {
     return;
   }
 
-  if (state.currentMissingFields.length > 0) {
+  if (state.currentMissingRequiredFields.length > 0) {
     els.createButton.disabled = true;
     els.createButton.textContent = "Create Project";
     setMessage("", "");
@@ -469,13 +508,13 @@ function renderStatus() {
 
   if (!state.selectedQuoteId) {
     els.createButton.disabled = true;
-    els.createButton.textContent = state.actualMissingFields.length > 0 ? "Save & Create Project" : "Create Project";
+    els.createButton.textContent = state.actualMissingFields.some(field => fieldIsEditable(field) && !valueIsEmpty(getCurrentConfiguredValue(field))) ? "Save & Create Project" : "Create Project";
     setMessage("", "");
     return;
   }
 
   els.createButton.disabled = !canCreateProject();
-  els.createButton.textContent = state.actualMissingFields.length > 0 ? "Save & Create Project" : "Create Project";
+  els.createButton.textContent = state.actualMissingFields.some(field => fieldIsEditable(field) && !valueIsEmpty(getCurrentConfiguredValue(field))) ? "Save & Create Project" : "Create Project";
   setMessage("", "");
 }
 
@@ -500,7 +539,7 @@ async function loadDeal() {
 
     validateDeal();
     await loadRelatedQuotes();
-    debug({ deal: state.deal, quotes: state.quotes, eligibleQuotes: state.eligibleQuotes, actualMissingFields: state.actualMissingFields, currentMissingFields: state.currentMissingFields, isInstall: state.isInstall });
+    debug({ deal: state.deal, quotes: state.quotes, eligibleQuotes: state.eligibleQuotes, actualMissingFields: state.actualMissingFields, currentMissingFields: state.currentMissingRequiredFields, isInstall: state.isInstall });
   } catch (error) {
     setMessage("error", error.message || "Error loading Deal.");
   } finally {
@@ -532,17 +571,14 @@ async function loadRelatedQuotes() {
 }
 
 function buildFieldValuesPayload() {
-  // Pass the widget's current view of every editable required field straight
-  // to the create_project function. This avoids a race where the function's
-  // own zoho.crm.getRecordById read happens before CRM has finished
-  // propagating a field we just saved, which was causing "not ready" errors
-  // on the same save that just wrote the last missing field.
   const payload = {};
 
-  cfg.requiredFields.forEach(field => {
+  (cfg.fields || []).forEach(field => {
     if (!fieldIsEditable(field)) return;
-    const value = getCurrentFieldValue(field.apiName);
-    payload[field.apiName] = typeof value === "string" ? value.trim() : value;
+    const value = getCurrentConfiguredValue(field);
+    if (fieldSource(field) === "project" || !valueIsEmpty(value)) {
+      payload[field.apiName] = typeof value === "string" ? value.trim() : value;
+    }
   });
 
   return payload;
@@ -552,9 +588,9 @@ function collectEditableDealFieldUpdates() {
   const payload = {};
 
   state.actualMissingFields.forEach(field => {
-    if (!fieldIsEditable(field)) return;
+    if (fieldSource(field) !== "deal" || !fieldIsEditable(field)) return;
 
-    const value = getCurrentFieldValue(field.apiName);
+    const value = getCurrentConfiguredValue(field);
     if (!valueIsEmpty(value)) {
       payload[field.apiName] = typeof value === "string" ? value.trim() : value;
     }
@@ -613,7 +649,7 @@ async function createProject() {
   els.createButton.textContent = "Creating...";
 
   try {
-    if (state.actualMissingFields.length > 0) {
+    if (Object.keys(collectEditableDealFieldUpdates()).length > 0) {
       await saveEditableDealFieldsIfNeeded();
       validateDeal();
 
@@ -658,7 +694,7 @@ async function createProject() {
   } catch (error) {
     setMessage("error", error.message || "Error creating Project.");
     els.createButton.disabled = false;
-    els.createButton.textContent = state.actualMissingFields.length > 0 ? "Save & Create Project" : "Create Project";
+    els.createButton.textContent = state.actualMissingFields.some(field => fieldIsEditable(field) && !valueIsEmpty(getCurrentConfiguredValue(field))) ? "Save & Create Project" : "Create Project";
   } finally {
     state.isBusy = false;
     if (!createdProject) {
