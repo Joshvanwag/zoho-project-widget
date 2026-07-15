@@ -778,9 +778,24 @@ function wireEvents() {
   });
 }
 
+function requestWidgetSize() {
+  // The widget's own HTML/CSS can be as wide as we like, but Zoho renders it
+  // inside a popup/iframe whose actual pixel size is controlled separately.
+  // ZOHO.CRM.UI.Resize asks Zoho to grow that container to fit our layout.
+  try {
+    if (ZOHO?.CRM?.UI?.Resize) {
+      ZOHO.CRM.UI.Resize({ height: "760", width: "1040" });
+    }
+  } catch (error) {
+    // Older/other widget contexts (e.g. some related-list placements) may not
+    // support Resize. Fail silently and keep whatever size Zoho provided.
+  }
+}
+
 ZOHO.embeddedApp.on("PageLoad", function(data) {
   const entityId = data?.EntityId || data?.entityId || data?.id;
   state.dealId = Array.isArray(entityId) ? entityId[0] : entityId;
+  requestWidgetSize();
   wireEvents();
   loadDeal();
 });
