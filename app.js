@@ -778,24 +778,41 @@ function wireEvents() {
   });
 }
 
-function requestWidgetSize() {
-  // The widget's own HTML/CSS can be as wide as we like, but Zoho renders it
-  // inside a popup/iframe whose actual pixel size is controlled separately.
-  // ZOHO.CRM.UI.Resize asks Zoho to grow that container to fit our layout.
+function requestWidgetSize(attempt = 1) {
+  const dimensions = {
+    width: 1040,
+    height: 760
+  };
+
   try {
-    if (ZOHO?.CRM?.UI?.Resize) {
-      ZOHO.CRM.UI.Resize({ height: "760", width: "1040" });
+    if (!ZOHO?.CRM?.UI?.Resize) {
+      console.warn(`Widget resize attempt ${attempt}: ZOHO.CRM.UI.Resize is unavailable.`);
+      return;
+    }
+
+    console.log(`Widget resize attempt ${attempt}:`, dimensions);
+    const result = ZOHO.CRM.UI.Resize(dimensions);
+
+    if (result && typeof result.then === "function") {
+      result
+        .then(response => console.log(`Widget resize response ${attempt}:`, response))
+        .catch(error => console.error(`Widget resize rejected ${attempt}:`, error));
+    } else {
+      console.log(`Widget resize result ${attempt}:`, result);
     }
   } catch (error) {
-    // Older/other widget contexts (e.g. some related-list placements) may not
-    // support Resize. Fail silently and keep whatever size Zoho provided.
+    console.error(`Widget resize failed ${attempt}:`, error);
   }
 }
 
 ZOHO.embeddedApp.on("PageLoad", function(data) {
   const entityId = data?.EntityId || data?.entityId || data?.id;
   state.dealId = Array.isArray(entityId) ? entityId[0] : entityId;
-  requestWidgetSize();
+
+  requestWidgetSize(1);
+  window.setTimeout(() => requestWidgetSize(2), 300);
+  window.setTimeout(() => requestWidgetSize(3), 1000);
+
   wireEvents();
   loadDeal();
 });
