@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Create Zoho Project</title>
-  <link rel="stylesheet" href="style.css?v=20260725-2" />
+  <link rel="stylesheet" href="style.css?v=20260725-3" />
 </head>
 <body>
   <main class="wrap">
@@ -18,6 +18,17 @@
       </div>
 
       <div id="message" class="message info hidden">Loading the Deal from Zoho CRM.</div>
+
+      <details id="existingDealInfo" class="existing-deal-info hidden">
+        <summary>
+          <span class="existing-info-copy">
+            <span class="existing-info-title">Existing Deal Information for Project</span>
+            <span class="existing-info-subtitle">Review the details that will be transferred automatically.</span>
+          </span>
+          <span class="existing-info-action" aria-hidden="true">View details</span>
+        </summary>
+        <div id="existingDealInfoGrid" class="existing-info-grid"></div>
+      </details>
 
       <form id="fieldsForm" class="fields hidden">
         <div id="fieldContainer"></div>
@@ -34,6 +45,6 @@
 
   <script src="https://live.zwidgets.com/js-sdk/1.2/ZohoEmbededAppSDK.min.js"></script>
   <script src="config.js?v=20260725-1"></script>
-  <script src="app.js?v=20260725-2"></script>
+  <script src="app.js?v=20260725-3"></script>
 </body>
 </html>

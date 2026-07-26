@@ -431,3 +431,107 @@ input[type="date"]:disabled::-webkit-calendar-picker-indicator {
   margin-top: 0;
   padding-top: 0;
 }
+
+
+/* --- Expandable existing Deal information --- */
+.existing-deal-info {
+  margin: 0 0 20px;
+  border: 1px solid #dbe3ef;
+  border-radius: 12px;
+  background: #f8fafc;
+  overflow: hidden;
+}
+
+.existing-deal-info summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 16px 18px;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+
+.existing-deal-info summary::-webkit-details-marker {
+  display: none;
+}
+
+.existing-deal-info summary:hover {
+  background: #f1f5f9;
+}
+
+.existing-info-copy {
+  display: grid;
+  gap: 3px;
+}
+
+.existing-info-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #1f2937;
+}
+
+.existing-info-subtitle {
+  font-size: 13px;
+  color: #64748b;
+}
+
+.existing-info-action {
+  flex: 0 0 auto;
+  font-size: 13px;
+  font-weight: 700;
+  color: #2563eb;
+}
+
+.existing-deal-info[open] .existing-info-action {
+  font-size: 0;
+}
+
+.existing-deal-info[open] .existing-info-action::after {
+  content: "Hide details";
+  font-size: 13px;
+}
+
+.existing-info-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0;
+  padding: 0 18px 18px;
+}
+
+.existing-info-item {
+  min-width: 0;
+  padding: 12px 14px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.existing-info-label {
+  margin-bottom: 4px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #64748b;
+}
+
+.existing-info-value {
+  font-size: 14px;
+  color: #1f2937;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 900px) {
+  .existing-info-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .existing-deal-info summary {
+    align-items: flex-start;
+  }
+
+  .existing-info-grid {
+    grid-template-columns: 1fr;
+  }
+}

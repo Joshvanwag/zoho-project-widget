@@ -21,6 +21,8 @@ const els = {
   subtitle: document.getElementById("subtitle"),
   statusBadge: document.getElementById("statusBadge"),
   message: document.getElementById("message"),
+  existingDealInfo: document.getElementById("existingDealInfo"),
+  existingDealInfoGrid: document.getElementById("existingDealInfoGrid"),
   fieldsForm: document.getElementById("fieldsForm"),
   fieldContainer: document.getElementById("fieldContainer"),
   refreshButton: document.getElementById("refreshButton"),
@@ -255,6 +257,67 @@ function getCurrentConfiguredValue(field) {
     return state.draftValues[field.apiName];
   }
   return fieldSource(field) === "deal" ? getDealFieldValue(field.apiName) : null;
+}
+
+function formatExistingDealValue(field, value) {
+  if (value === null || value === undefined || value === "") return "";
+
+  if (field.type === "checkbox") {
+    return value === true || String(value).toLowerCase() === "true" || String(value).toLowerCase() === "yes"
+      ? "Yes"
+      : "No";
+  }
+
+  if (Array.isArray(value)) return value.join(", ");
+
+  if (field.type === "currency") {
+    const numberValue = Number(value);
+    if (Number.isFinite(numberValue)) {
+      return new Intl.NumberFormat("en-US", {
+        style: "currency",
+        currency: "USD"
+      }).format(numberValue);
+    }
+  }
+
+  return displayValue(value);
+}
+
+function renderExistingDealInfo() {
+  els.existingDealInfoGrid.innerHTML = "";
+
+  if (!state.deal) {
+    els.existingDealInfo.classList.add("hidden");
+    return;
+  }
+
+  const populatedDealFields = (cfg.fields || []).filter(field => {
+    return fieldSource(field) === "deal" && !valueIsEmpty(getDealFieldValue(field.apiName));
+  });
+
+  if (populatedDealFields.length === 0) {
+    els.existingDealInfo.classList.add("hidden");
+    return;
+  }
+
+  populatedDealFields.forEach(field => {
+    const item = document.createElement("div");
+    item.className = "existing-info-item";
+
+    const label = document.createElement("div");
+    label.className = "existing-info-label";
+    label.textContent = field.label;
+
+    const value = document.createElement("div");
+    value.className = "existing-info-value";
+    value.textContent = formatExistingDealValue(field, getDealFieldValue(field.apiName));
+
+    item.appendChild(label);
+    item.appendChild(value);
+    els.existingDealInfoGrid.appendChild(item);
+  });
+
+  els.existingDealInfo.classList.remove("hidden");
 }
 
 function validateDeal() {
@@ -585,10 +648,12 @@ function renderStatus() {
 
 function render() {
   if (!state.deal) {
+    renderExistingDealInfo();
     renderStatus();
     return;
   }
 
+  renderExistingDealInfo();
   renderFields();
   renderSalesOrders();
   renderStatus();
