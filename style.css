@@ -506,6 +506,12 @@ input[type="date"]:disabled::-webkit-calendar-picker-indicator {
   border-top: 1px solid #e2e8f0;
 }
 
+/* Long text fields use their own full-width rows so neighboring columns do not
+   become unnecessarily tall when these values contain detailed descriptions. */
+.existing-info-item-full {
+  grid-column: 1 / -1;
+}
+
 .existing-info-label {
   margin-bottom: 4px;
   font-size: 12px;

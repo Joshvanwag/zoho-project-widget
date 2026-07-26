@@ -300,9 +300,19 @@ function renderExistingDealInfo() {
     return;
   }
 
+  const fullWidthExistingFields = new Set([
+    "Description",
+    "Description_of_Work_2",
+    "Programming"
+  ]);
+
   populatedDealFields.forEach(field => {
     const item = document.createElement("div");
     item.className = "existing-info-item";
+
+    if (fullWidthExistingFields.has(field.apiName)) {
+      item.classList.add("existing-info-item-full");
+    }
 
     const label = document.createElement("div");
     label.className = "existing-info-label";
