@@ -778,30 +778,23 @@ function wireEvents() {
   });
 }
 
-function requestWidgetSize(attempt = 1) {
+function requestWidgetSize() {
   const dimensions = {
-    width: 1040,
-    height: 760
+    width: 1350,
+    height: 700
   };
 
   try {
     if (!ZOHO?.CRM?.UI?.Resize) {
-      console.warn(`Widget resize attempt ${attempt}: ZOHO.CRM.UI.Resize is unavailable.`);
+      console.warn("ZOHO.CRM.UI.Resize is unavailable.");
       return;
     }
 
-    console.log(`Widget resize attempt ${attempt}:`, dimensions);
-    const result = ZOHO.CRM.UI.Resize(dimensions);
-
-    if (result && typeof result.then === "function") {
-      result
-        .then(response => console.log(`Widget resize response ${attempt}:`, response))
-        .catch(error => console.error(`Widget resize rejected ${attempt}:`, error));
-    } else {
-      console.log(`Widget resize result ${attempt}:`, result);
-    }
+    ZOHO.CRM.UI.Resize(dimensions)
+      .then(response => console.log("Widget resize response:", response))
+      .catch(error => console.error("Widget resize failed:", error));
   } catch (error) {
-    console.error(`Widget resize failed ${attempt}:`, error);
+    console.error("Widget resize failed:", error);
   }
 }
 
@@ -809,9 +802,7 @@ ZOHO.embeddedApp.on("PageLoad", function(data) {
   const entityId = data?.EntityId || data?.entityId || data?.id;
   state.dealId = Array.isArray(entityId) ? entityId[0] : entityId;
 
-  requestWidgetSize(1);
-  window.setTimeout(() => requestWidgetSize(2), 300);
-  window.setTimeout(() => requestWidgetSize(3), 1000);
+  requestWidgetSize();
 
   wireEvents();
   loadDeal();
