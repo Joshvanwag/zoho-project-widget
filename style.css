@@ -141,38 +141,40 @@ p {
   grid-column: 1 / -1;
 }
 
-/* Required fields get a subtle highlighted rail + tint so they stand out and
-   are easy to scan now that they're grouped at the top of the form. */
+/* Compact section labels keep required and optional fields easy to scan without
+   wrapping every required field in a large card. */
 .field-row.required-field {
-  position: relative;
-  padding: 10px 12px 10px 14px;
-  background: #fafbff;
-  border: 1px solid #e0e7ff;
-  border-left: 3px solid #4f46e5;
-  border-radius: 10px;
-  margin-bottom: 12px;
+  margin-bottom: 14px;
+}
+
+.required-group-label,
+.optional-group-label {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin: 2px 0 4px;
 }
 
 .required-group-label {
-  grid-column: 1 / -1;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
   color: #4f46e5;
-  margin: 4px 0 2px;
 }
 
 .optional-group-label {
-  grid-column: 1 / -1;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
   color: #6b7280;
-  margin: 18px 0 2px;
-  padding-top: 10px;
-  border-top: 1px solid #e5e7eb;
+  margin-top: 10px;
+}
+
+.required-group-label::after,
+.optional-group-label::after {
+  content: "";
+  height: 1px;
+  flex: 1;
+  background: #e5e7eb;
 }
 
 label {
@@ -298,13 +300,156 @@ select:disabled {
   cursor: not-allowed;
 }
 
-select[multiple] {
-  appearance: auto;
-  -webkit-appearance: auto;
-  background-image: none;
-  padding: 8px;
-  min-height: 84px;
+/* --- True multipicklist: one-line tag field with dropdown options --- */
+.multi-picklist {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+  font-size: 14px;
+}
+
+.multi-picklist-value-line {
+  min-height: 42px;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-sizing: border-box;
+  padding: 5px 36px 5px 7px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background: #ffffff;
   cursor: pointer;
+  position: relative;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.multi-picklist:not(.disabled) .multi-picklist-value-line:hover {
+  border-color: #a5b4fc;
+}
+
+.multi-picklist.open .multi-picklist-value-line,
+.multi-picklist:focus .multi-picklist-value-line {
+  outline: none;
+  border-color: #4f46e5;
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.15);
+}
+
+.multi-picklist.disabled .multi-picklist-value-line {
+  background: #f3f4f6;
+  color: #6b7280;
+  cursor: not-allowed;
+}
+
+.multi-picklist-chips {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: nowrap;
+  min-width: min-content;
+}
+
+.multi-picklist-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex: 0 0 auto;
+  max-width: 320px;
+  padding: 4px 7px;
+  border: 1px solid #c7d2fe;
+  border-radius: 6px;
+  background: #eef2ff;
+  color: #3730a3;
+  font-size: 12px;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.multi-picklist-chip.locked {
+  background: #ecfdf5;
+  border-color: #a7f3d0;
+  color: #065f46;
+}
+
+.multi-picklist-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: currentColor;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 1;
+}
+
+.multi-picklist-remove:hover:not(:disabled) {
+  background: rgba(55, 48, 163, 0.12);
+}
+
+.multi-picklist-placeholder {
+  color: #9ca3af;
+  white-space: nowrap;
+}
+
+.multi-picklist-caret {
+  position: absolute;
+  right: 11px;
+  top: 50%;
+  width: 8px;
+  height: 8px;
+  border-right: 2px solid #6b7280;
+  border-bottom: 2px solid #6b7280;
+  transform: translateY(-65%) rotate(45deg);
+  transition: transform 0.15s ease;
+}
+
+.multi-picklist.open .multi-picklist-caret {
+  transform: translateY(-25%) rotate(225deg);
+}
+
+.multi-picklist-menu {
+  position: absolute;
+  z-index: 100;
+  top: calc(100% + 5px);
+  left: 0;
+  right: 0;
+  max-height: 240px;
+  overflow-y: auto;
+  padding: 5px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.14);
+}
+
+.multi-picklist-option {
+  display: block;
+  width: 100%;
+  padding: 9px 10px;
+  border-radius: 6px;
+  background: transparent;
+  color: #1f2937;
+  text-align: left;
+  font-weight: 400;
+  font-size: 14px;
+}
+
+.multi-picklist-option:hover:not(:disabled) {
+  background: #eef2ff;
+  color: #312e81;
+}
+
+.multi-picklist-empty {
+  padding: 9px 10px;
+  color: #6b7280;
+  font-size: 13px;
 }
 
 /* --- Date pickers --- */
