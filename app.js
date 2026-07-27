@@ -278,6 +278,20 @@ function getCurrentConfiguredValue(field) {
   return enforceLockedValues(field, value);
 }
 
+function conditionMatches(condition) {
+  if (!condition || !condition.apiName) return true;
+  return normalize(getCurrentFieldValue(condition.apiName)) === normalize(condition.equals);
+}
+
+function fieldIsConditionallyVisible(field) {
+  return !field.visibleWhen || conditionMatches(field.visibleWhen);
+}
+
+function fieldIsRequired(field) {
+  if (field.required === true) return true;
+  return Boolean(field.requiredWhen && conditionMatches(field.requiredWhen));
+}
+
 function formatExistingDealValue(field, value) {
   if (value === null || value === undefined || value === "") return "";
 
@@ -355,21 +369,27 @@ function validateDeal() {
 
   const fields = cfg.fields || [];
   state.visibleFields = fields.filter(field => {
+    if (!fieldIsConditionallyVisible(field)) return false;
     if (field.showWhenBlank === false) return false;
     if (fieldSource(field) === "project") return true;
     return valueIsEmpty(getDealFieldValue(field.apiName));
   });
 
   state.actualMissingFields = fields.filter(field =>
-    fieldSource(field) === "deal" && valueIsEmpty(getDealFieldValue(field.apiName))
+    fieldIsConditionallyVisible(field) &&
+    fieldSource(field) === "deal" &&
+    valueIsEmpty(getDealFieldValue(field.apiName))
   );
 
   state.currentMissingRequiredFields = fields.filter(field =>
-    field.required === true && valueIsEmpty(getCurrentConfiguredValue(field))
+    fieldIsConditionallyVisible(field) &&
+    fieldIsRequired(field) &&
+    valueIsEmpty(getCurrentConfiguredValue(field))
   );
 
   state.readOnlyMissingFields = fields.filter(field =>
-    field.required === true &&
+    fieldIsConditionallyVisible(field) &&
+    fieldIsRequired(field) &&
     fieldSource(field) === "deal" &&
     !fieldIsEditable(field) &&
     valueIsEmpty(getDealFieldValue(field.apiName))
@@ -384,164 +404,27 @@ function isSingleOptionToggle(field) {
   return field.type === "multipicklist" && getPicklistOptions(field).length === 1;
 }
 
-function createMultiPicklistControl(field, currentValue, isDisabled) {
-  const options = getPicklistOptions(field);
-  const lockedValues = getLockedValues(field);
-  let selectedValues = enforceLockedValues(field, currentValue);
-
-  const control = document.createElement("div");
-  control.className = "multi-picklist";
-  control.id = field.apiName;
-  control.dataset.fieldName = field.apiName;
-  control.tabIndex = isDisabled ? -1 : 0;
-  if (isDisabled) control.classList.add("disabled");
-
-  const valueLine = document.createElement("div");
-  valueLine.className = "multi-picklist-value-line";
-
-  const chips = document.createElement("div");
-  chips.className = "multi-picklist-chips";
-
-  const placeholder = document.createElement("span");
-  placeholder.className = "multi-picklist-placeholder";
-  placeholder.textContent = `Select ${field.label}...`;
-
-  const caret = document.createElement("span");
-  caret.className = "multi-picklist-caret";
-  caret.setAttribute("aria-hidden", "true");
-
-  const menu = document.createElement("div");
-  menu.className = "multi-picklist-menu hidden";
-
-  function saveSelection() {
-    selectedValues = enforceLockedValues(field, selectedValues);
-    state.draftValues[field.apiName] = [...selectedValues];
-    validateDeal();
-    updateCreateButtonStateOnly();
-  }
-
-  function renderControl() {
-    chips.innerHTML = "";
-
-    selectedValues.forEach(value => {
-      const optionData = options.find(option => option.value === value);
-      if (!optionData) return;
-
-      const chip = document.createElement("span");
-      chip.className = "multi-picklist-chip";
-      if (lockedValues.includes(value)) chip.classList.add("locked");
-
-      const chipText = document.createElement("span");
-      chipText.textContent = optionData.label;
-      chip.appendChild(chipText);
-
-      if (!lockedValues.includes(value) && !isDisabled) {
-        const removeButton = document.createElement("button");
-        removeButton.type = "button";
-        removeButton.className = "multi-picklist-remove";
-        removeButton.setAttribute("aria-label", `Remove ${optionData.label}`);
-        removeButton.textContent = "×";
-        removeButton.addEventListener("click", event => {
-          event.stopPropagation();
-          selectedValues = selectedValues.filter(selected => selected !== value);
-          saveSelection();
-          renderControl();
-        });
-        chip.appendChild(removeButton);
-      }
-
-      chips.appendChild(chip);
-    });
-
-    placeholder.classList.toggle("hidden", selectedValues.length > 0);
-    menu.innerHTML = "";
-
-    const availableOptions = options.filter(option => !selectedValues.includes(option.value));
-    if (availableOptions.length === 0) {
-      const empty = document.createElement("div");
-      empty.className = "multi-picklist-empty";
-      empty.textContent = "All options selected";
-      menu.appendChild(empty);
-    } else {
-      availableOptions.forEach(optionData => {
-        const item = document.createElement("button");
-        item.type = "button";
-        item.className = "multi-picklist-option";
-        item.textContent = optionData.label;
-        item.addEventListener("click", event => {
-          event.stopPropagation();
-          selectedValues.push(optionData.value);
-          saveSelection();
-          renderControl();
-          menu.classList.remove("hidden");
-          control.classList.add("open");
-        });
-        menu.appendChild(item);
-      });
-    }
-  }
-
-  function openMenu() {
-    if (isDisabled) return;
-    menu.classList.remove("hidden");
-    control.classList.add("open");
-  }
-
-  function closeMenu() {
-    menu.classList.add("hidden");
-    control.classList.remove("open");
-  }
-
-  valueLine.appendChild(chips);
-  valueLine.appendChild(placeholder);
-  valueLine.appendChild(caret);
-  control.appendChild(valueLine);
-  control.appendChild(menu);
-
-  if (!isDisabled) {
-    valueLine.addEventListener("click", event => {
-      event.stopPropagation();
-      if (menu.classList.contains("hidden")) openMenu();
-      else closeMenu();
-    });
-
-    control.addEventListener("keydown", event => {
-      if (event.key === "Enter" || event.key === " ") {
-        event.preventDefault();
-        if (menu.classList.contains("hidden")) openMenu();
-        else closeMenu();
-      } else if (event.key === "Escape") {
-        closeMenu();
-      }
-    });
-
-    document.addEventListener("click", event => {
-      if (!control.contains(event.target)) closeMenu();
-    });
-  }
-
-  renderControl();
-  return control;
-}
-
 function renderFields() {
   els.fieldContainer.innerHTML = "";
 
+  // Required fields are grouped and shown first so the user always sees what
+  // they must fill in before scrolling to optional/informational fields.
+  // Array.prototype.sort is stable, so ties preserve the original config order.
   const orderedFields = [...state.visibleFields].sort((a, b) => {
-    return (a.required === true ? 0 : 1) - (b.required === true ? 0 : 1);
+    return (fieldIsRequired(a) ? 0 : 1) - (fieldIsRequired(b) ? 0 : 1);
   });
 
   let hasRenderedRequiredLabel = false;
   let hasRenderedOptionalLabel = false;
 
   orderedFields.forEach(field => {
-    if (field.required === true && !hasRenderedRequiredLabel) {
+    if (fieldIsRequired(field) && !hasRenderedRequiredLabel) {
       const groupLabel = document.createElement("div");
       groupLabel.className = "required-group-label";
       groupLabel.textContent = "Required";
       els.fieldContainer.appendChild(groupLabel);
       hasRenderedRequiredLabel = true;
-    } else if (field.required !== true && !hasRenderedOptionalLabel && hasRenderedRequiredLabel) {
+    } else if (!fieldIsRequired(field) && !hasRenderedOptionalLabel && hasRenderedRequiredLabel) {
       const groupLabel = document.createElement("div");
       groupLabel.className = "optional-group-label";
       groupLabel.textContent = "Additional details";
@@ -551,7 +434,7 @@ function renderFields() {
 
     const row = document.createElement("div");
     row.className = "field-row";
-    if (field.required === true) row.classList.add("required-field");
+    if (fieldIsRequired(field)) row.classList.add("required-field");
 
     const isToggle = field.type === "checkbox" || isSingleOptionToggle(field);
     const isDisabled = !fieldIsEditable(field);
@@ -559,7 +442,7 @@ function renderFields() {
     const label = document.createElement("label");
     label.setAttribute("for", field.apiName);
     label.appendChild(document.createTextNode(field.label + " "));
-    if (field.required === true) {
+    if (fieldIsRequired(field)) {
       const star = document.createElement("span");
       star.className = "required-star";
       star.textContent = "*";
@@ -567,12 +450,10 @@ function renderFields() {
     }
 
     let input;
-    const currentValue = getCurrentConfiguredValue(field);
 
-    if (field.type === "multipicklist") {
-      input = createMultiPicklistControl(field, currentValue, isDisabled || state.isBusy);
-      row.classList.add("span-2");
-    } else if (isToggle) {
+    if (isToggle) {
+      // Build a styled toggle switch: a visually-hidden checkbox plus a
+      // slider span, wrapped together so a single <label> click toggles it.
       input = document.createElement("input");
       input.type = "checkbox";
 
@@ -591,8 +472,9 @@ function renderFields() {
       input = document.createElement("textarea");
       input.rows = 4;
       row.classList.add("span-2");
-    } else if (field.type === "picklist") {
+    } else if (field.type === "picklist" || field.type === "multipicklist") {
       input = document.createElement("select");
+      if (field.type === "multipicklist") input.multiple = true;
       const placeholder = document.createElement("option");
       placeholder.value = "";
       placeholder.textContent = `Select ${field.label}...`;
@@ -602,6 +484,12 @@ function renderFields() {
         const option = document.createElement("option");
         option.value = optionData.value;
         option.textContent = optionData.label;
+
+        if (getLockedValues(field).includes(optionData.value)) {
+          option.selected = true;
+          option.disabled = true;
+        }
+
         input.appendChild(option);
       });
     } else {
@@ -615,62 +503,76 @@ function renderFields() {
       }
     }
 
-    if (field.type !== "multipicklist") {
-      input.id = field.apiName;
-      input.name = field.apiName;
+    input.id = field.apiName;
+    input.name = field.apiName;
+    const currentValue = getCurrentConfiguredValue(field);
 
-      if (field.type === "checkbox") {
-        input.checked = currentValue === true || String(currentValue).toLowerCase() === "true" || String(currentValue).toLowerCase() === "yes";
-      } else if (isSingleOptionToggle(field)) {
-        const toggleOptionValue = getPicklistOptions(field)[0].value;
-        input.checked = Array.isArray(currentValue) && currentValue.includes(toggleOptionValue);
-      } else {
-        input.value = displayValue(currentValue);
-      }
+    if (field.type === "checkbox") {
+      input.checked = currentValue === true || String(currentValue).toLowerCase() === "true" || String(currentValue).toLowerCase() === "yes";
+    } else if (isSingleOptionToggle(field)) {
+      const toggleOptionValue = getPicklistOptions(field)[0].value;
+      input.checked = Array.isArray(currentValue) && currentValue.includes(toggleOptionValue);
+    } else if (field.type === "multipicklist" && Array.isArray(currentValue)) {
+      Array.from(input.options).forEach(option => {
+        option.selected = currentValue.includes(option.value) || getLockedValues(field).includes(option.value);
+      });
+    } else {
+      input.value = displayValue(currentValue);
+    }
 
-      input.disabled = isDisabled || state.isBusy;
-      if (!isToggle) {
-        input.placeholder = input.disabled ? "Edit this field on the Deal record" : `Enter ${field.label}`;
-      }
+    input.disabled = isDisabled || state.isBusy;
+    if (!isToggle) {
+      input.placeholder = input.disabled ? "Edit this field on the Deal record" : `Enter ${field.label}`;
+    }
 
-      if (!isDisabled) {
-        const captureValue = event => {
-          if (field.type === "checkbox") return event.target.checked;
-          if (isSingleOptionToggle(field)) {
-            const toggleOptionValue = getPicklistOptions(field)[0].value;
-            return event.target.checked ? [toggleOptionValue] : [];
-          }
-          return event.target.value;
-        };
+    if (!isDisabled) {
+      const captureValue = event => {
+        if (field.type === "checkbox") return event.target.checked;
+        if (isSingleOptionToggle(field)) {
+          const toggleOptionValue = getPicklistOptions(field)[0].value;
+          return event.target.checked ? [toggleOptionValue] : [];
+        }
+        if (field.type === "multipicklist") {
+          const selectedValues = Array.from(event.target.selectedOptions)
+            .map(option => option.value)
+            .filter(Boolean);
+          return enforceLockedValues(field, selectedValues);
+        }
+        return event.target.value;
+      };
 
-        input.addEventListener("input", event => {
-          state.draftValues[field.apiName] = captureValue(event);
-          validateDeal();
-          updateCreateButtonStateOnly();
-        });
+      input.addEventListener("input", event => {
+        state.draftValues[field.apiName] = captureValue(event);
+        validateDeal();
+        updateCreateButtonStateOnly();
+      });
 
-        input.addEventListener("blur", () => {
-          validateDeal();
-          renderStatus();
-        });
+      input.addEventListener("blur", () => {
+        validateDeal();
+        renderStatus();
+      });
 
-        input.addEventListener("change", event => {
-          state.draftValues[field.apiName] = captureValue(event);
-          validateDeal();
-          if (["picklist", "checkbox"].includes(field.type)) renderStatus();
-          else updateCreateButtonStateOnly();
-        });
-      }
+      input.addEventListener("change", event => {
+        state.draftValues[field.apiName] = captureValue(event);
+        if (field.type === "multipicklist") {
+          Array.from(input.options).forEach(option => {
+            if (getLockedValues(field).includes(option.value)) option.selected = true;
+          });
+        }
+        validateDeal();
+        if (["picklist", "multipicklist", "checkbox"].includes(field.type)) render();
+        else updateCreateButtonStateOnly();
+      });
     }
 
     row.appendChild(label);
-    row.appendChild(field.type === "multipicklist" ? input : (isToggle ? input._toggleWrap : input));
+    row.appendChild(isToggle ? input._toggleWrap : input);
 
     if (isDisabled) {
       const note = document.createElement("small");
       note.textContent = "This field must be edited on the Deal record.";
       row.appendChild(note);
-    } else if (field.type === "picklist" && getPicklistOptions(field).length === 0) {
+    } else if (["picklist", "multipicklist"].includes(field.type) && !isToggle && getPicklistOptions(field).length === 0) {
       const note = document.createElement("small");
       note.textContent = "Picklist options could not be loaded.";
       row.appendChild(note);
@@ -869,6 +771,7 @@ function buildFieldValuesPayload() {
   const payload = {};
 
   (cfg.fields || []).forEach(field => {
+    if (!fieldIsConditionallyVisible(field)) return;
     if (!fieldIsEditable(field)) return;
     const value = getCurrentConfiguredValue(field);
     if (fieldSource(field) === "project" || !valueIsEmpty(value)) {
@@ -883,6 +786,7 @@ function collectEditableDealFieldUpdates() {
   const payload = {};
 
   state.actualMissingFields.forEach(field => {
+    if (!fieldIsConditionallyVisible(field)) return;
     if (fieldSource(field) !== "deal" || !fieldIsEditable(field)) return;
 
     const value = getCurrentConfiguredValue(field);

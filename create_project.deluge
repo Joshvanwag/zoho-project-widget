@@ -205,17 +205,12 @@ try
 		ifnull(deal.get("Power_Electrical"),"")
 	);
 
-	tentativeInstallDate = ifnull(
-		fieldValuesArg.get("Tentative_Install_Dat"),
-		ifnull(deal.get("Tentative_Install_Dat"),"")
+	preWireNeeded = ifnull(
+		fieldValuesArg.get("Pre_Wire_Needed"),
+		ifnull(deal.get("Pre_Wire_Needed"),"")
 	);
 
-	completionDate = ifnull(
-		fieldValuesArg.get("Project_Completion_Date"),
-		ifnull(deal.get("Project_Completion_Date"),"")
-	);
-
-	// Project-only widget fields.
+	// Project-only conditional date fields.
 	preWireDate = ifnull(fieldValuesArg.get("pre_wire_date"),"");
 	proposedStartDate = ifnull(fieldValuesArg.get("proposed_start_date"),"");
 	lineDrawingInformation = ifnull(fieldValuesArg.get("sow_and_ld_information"),"");
@@ -317,6 +312,29 @@ try
 	if(scheduleExpectation == "")
 	{
 		missing.add("Schedule Expectation");
+	}
+	else if(scheduleExpectation != "Next available" && scheduleExpectation != "By Deadline (date needed)")
+	{
+		missing.add("Valid Schedule Expectation");
+	}
+
+	if(preWireNeeded == "")
+	{
+		missing.add("Pre-Wire Required");
+	}
+	else if(preWireNeeded != "Yes" && preWireNeeded != "No")
+	{
+		missing.add("Valid Pre-Wire Required value");
+	}
+
+	if(preWireNeeded == "Yes" && preWireDate == "")
+	{
+		missing.add("Pre-Wire Needed By Date");
+	}
+
+	if(scheduleExpectation == "By Deadline (date needed)" && proposedStartDate == "")
+	{
+		missing.add("Customer Install Deadline Date");
 	}
 
 	if(missing.size() > 0)
@@ -530,29 +548,14 @@ try
 	projectParams.put("primary_contact_email",primaryContactEmail);
 	projectParams.put("primary_contact_phone",primaryContactPhone);
 	projectParams.put("schedule_expectation",scheduleExpectation);
+	projectParams.put("pre_wire_needed",preWireNeeded);
 	projectParams.put("programming_information",programmingInformation);
 	projectParams.put("power_electrical",powerElectrical);
 	projectParams.put("projects_cf_0003",installHours);
 	projectParams.put("projects_cf_0004",programmingHours);
 	projectParams.put("programming",programmingRequired);
 
-	if(tentativeInstallDate != "")
-	{
-		projectParams.put(
-			"tentative_install_date",
-			tentativeInstallDate
-		);
-	}
-
-	if(completionDate != "")
-	{
-		projectParams.put(
-			"completion_date",
-			completionDate
-		);
-	}
-
-	if(preWireDate != "")
+	if(preWireNeeded == "Yes")
 	{
 		projectParams.put(
 			"pre_wire_date",
@@ -560,7 +563,7 @@ try
 		);
 	}
 
-	if(proposedStartDate != "")
+	if(scheduleExpectation == "By Deadline (date needed)")
 	{
 		projectParams.put(
 			"proposed_start_date",

@@ -40,13 +40,11 @@ window.PROJECT_WIDGET_CONFIG = {
 
     { apiName: "Installation_Hours", label: "Installation Hours", type: "decimal", source: "deal", required: true, editable: true },
     { apiName: "Programming_Hours", label: "Programming Hours", type: "decimal", source: "deal", required: true, editable: true },
-    { apiName: "Schedule_Expectation", label: "Schedule Expectation", type: "picklist", source: "deal", required: true, editable: true, options: ["Next available", "Target Date (date needed)", "By Deadline (date needed)", "ASAP"] },
-    { apiName: "Tentative_Install_Dat", label: "Tentative Install Date", type: "date", source: "deal", required: false, editable: true },
-    { apiName: "Project_Completion_Date", label: "Completion Date", type: "date", source: "deal", required: false, editable: true },
+    { apiName: "Schedule_Expectation", label: "Schedule Expectation", type: "picklist", source: "deal", required: true, editable: true, options: [{ value: "Next available", label: "Next Available" }, "By Deadline (date needed)"] },
+    { apiName: "proposed_start_date", label: "Customer Install Deadline Date", type: "date", source: "project", requiredWhen: { apiName: "Schedule_Expectation", equals: "By Deadline (date needed)" }, visibleWhen: { apiName: "Schedule_Expectation", equals: "By Deadline (date needed)" }, editable: true },
+    { apiName: "Pre_Wire_Needed", label: "Pre-Wire Required", type: "picklist", source: "deal", required: true, editable: true, options: ["Yes", "No"] },
+    { apiName: "pre_wire_date", label: "Pre-Wire Needed By Date", type: "date", source: "project", requiredWhen: { apiName: "Pre_Wire_Needed", equals: "Yes" }, visibleWhen: { apiName: "Pre_Wire_Needed", equals: "Yes" }, editable: true },
     { apiName: "Power_Electrical", label: "Power & Electrical", type: "textarea", source: "deal", required: false, editable: true },
-
-    { apiName: "pre_wire_date", label: "Pre-Wire Date", type: "date", source: "project", required: false, editable: true },
-    { apiName: "proposed_start_date", label: "Proposed Start Date", type: "date", source: "project", required: false, editable: true },
     { apiName: "sow_and_ld_information", label: "Line Drawing Information", type: "textarea", source: "project", required: false, editable: true },
     { apiName: "cad", label: "CAD Needed", type: "multipicklist", source: "project", required: true, editable: true, lockedValues: ["Signal Flow Diagrams"], options: ["Cover Sheet", "Key Plan", "Equipment and Electrical - Floor Plans", "Equipment and Electrical - Reflected Ceiling Plans (RCP)", "Equipment and Electrical - Elevations", "Signal Flow Diagrams", "Product Details", "Standards of Practice - Sign Off"] }
   ],

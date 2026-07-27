@@ -1,14 +1,20 @@
-# Zoho Project Widget - Updated Final
+# Zoho Project Widget Update
 
-Changes included:
-- Correct Project Template ID: 1684307000012655127
-- Private projects
-- Removed Work_City_State; only D_State_Selection is used
-- Building, room, address, city, state selection, and ZIP are required; Address 2 remains optional
-- CAD remains visible; Signal Flow Diagrams is always selected and cannot be removed
-- Users can add other CAD selections
-- Existing portal users are supplied in the project creation payload using their Projects IDs
-- CRM Deal association runs immediately after project creation
-- Zero immediate task count no longer causes failure
+Upload these files to the GitHub Pages repository root:
 
-Deploy create_project.deluge as the CRM standalone function named create_project.
+- index.html
+- app.js
+- config.js
+- style.css
+
+Deploy `create_project.deluge` as the CRM standalone function named `create_project`.
+
+## Scheduling and pre-wire behavior
+
+- Schedule Expectation only offers Next Available and By Deadline (date needed).
+- By Deadline requires Customer Install Deadline Date and maps it to `proposed_start_date`.
+- Next Available sends no deadline date.
+- Pre-Wire Required is a required Yes/No Deal field using `Pre_Wire_Needed`.
+- Yes requires Pre-Wire Needed By Date and maps it to `pre_wire_date`.
+- The Projects Yes/No field maps to `pre_wire_needed`.
+- Tentative Install Date and Completion Date are no longer shown or sent.
