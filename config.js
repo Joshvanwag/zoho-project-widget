@@ -28,7 +28,7 @@ window.PROJECT_WIDGET_CONFIG = {
     { apiName: "Billing_Exception", label: "Billing Exception", type: "text", source: "deal", required: false, editable: true },
 
     { apiName: "Programming_Required", label: "Programming Required", type: "checkbox", source: "deal", required: false, editable: true },
-    { apiName: "Programming", label: "Programming Information", type: "textarea", source: "deal", required: true, editable: true },
+    { apiName: "Programming", label: "Programming Information", type: "textarea", source: "deal", required: false, requiredWhen: { apiName: "Programming_Hours", greaterThan: 0 }, editable: true },
 
     { apiName: "Building_Name", label: "Building Name", type: "text", source: "deal", required: true, editable: true },
     { apiName: "Room_Name", label: "Room Name", type: "text", source: "deal", required: true, editable: true },

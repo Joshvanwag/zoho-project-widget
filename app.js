@@ -273,7 +273,28 @@ function conditionMatches(condition) {
   const controllingValue = controllingField
     ? getCurrentConfiguredValue(controllingField)
     : getCurrentFieldValue(condition.apiName);
+
+  if (condition.greaterThan !== undefined) {
+    const numericValue = Number(controllingValue);
+    return Number.isFinite(numericValue) && numericValue > Number(condition.greaterThan);
+  }
+
   return normalize(controllingValue) === normalize(condition.equals);
+}
+
+function programmingHoursAreGreaterThanZero() {
+  const hoursField = (cfg.fields || []).find(field => field.apiName === "Programming_Hours");
+  const value = hoursField ? getCurrentConfiguredValue(hoursField) : getCurrentFieldValue("Programming_Hours");
+  const hours = Number(value);
+  return Number.isFinite(hours) && hours > 0;
+}
+
+function syncProgrammingRequiredFromHours() {
+  if (!programmingHoursAreGreaterThanZero()) return;
+
+  const currentValue = getCurrentFieldValue("Programming_Required");
+  const isChecked = currentValue === true || ["true", "yes"].includes(String(currentValue).toLowerCase());
+  if (!isChecked) state.draftValues.Programming_Required = true;
 }
 
 function fieldShouldShow(field) {
@@ -336,6 +357,7 @@ function renderExistingDealInfo() {
 }
 
 function validateDeal() {
+  syncProgrammingRequiredFromHours();
   const installValue = getCurrentFieldValue(cfg.installTypeField);
   state.isInstall = cfg.installAllowedValues.includes(normalize(installValue));
 
@@ -749,6 +771,13 @@ function createFieldRow(field, context = "missing") {
       input.addEventListener("input", event => {
         state.draftValues[field.apiName] = captureValue(event);
         validateDeal();
+
+        if (field.apiName === "Programming_Hours" && programmingHoursAreGreaterThanZero()) {
+          document.querySelectorAll('input[name="Programming_Required"]').forEach(checkbox => {
+            checkbox.checked = true;
+          });
+        }
+
         updateCreateButtonStateOnly();
       });
 

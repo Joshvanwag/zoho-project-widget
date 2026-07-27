@@ -254,7 +254,17 @@ try
 		missing.add("SLA Level");
 	}
 
-	if(programmingInformation == "")
+	programmingHoursForValidation = 0.0;
+	try
+	{
+		programmingHoursForValidation = programmingHoursRaw.toDecimal();
+	}
+	catch(programmingValidationErr)
+	{
+		programmingHoursForValidation = 0.0;
+	}
+
+	if(programmingHoursForValidation > 0 && programmingInformation == "")
 	{
 		missing.add("Programming Information");
 	}
@@ -401,6 +411,12 @@ try
 		{
 			programmingRequired = true;
 		}
+	}
+
+	// Programming hours always control the required flag, even if the widget is bypassed.
+	if(programmingHours > 0)
+	{
+		programmingRequired = true;
 	}
 
 	// Resolve primary-contact values from the actual CRM Contact record.

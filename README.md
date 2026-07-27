@@ -1,12 +1,17 @@
-# Zoho Project Widget
+# Zoho Project Widget - Schedule and Pre-Wire Update
 
-This version keeps all previously completed project-creation changes and adds:
+Built from the supplied existing widget files.
 
-- Existing populated Deal fields become editable inputs inside the collapsed **View details** section.
-- Changes to existing Deal values are saved back to CRM before project creation.
-- Date inputs open the calendar when any part of the field is clicked.
-- Input selection, caret, focus, and date accents use light blue.
-- All single-value picklists, including the Sales Order selector, use the same chip-and-dropdown UI as CAD Needed.
-- CAD remains a true multipicklist with Signal Flow Diagrams locked in place.
+Changes:
+- Schedule Expectation options are only `Next available` and `By Deadline (date needed)`.
+- Removed Tentative Install Date and Completion Date from the widget and Deluge payload.
+- Proposed Start Date is no longer always visible.
+- Added required Deal field `Pre_Wire_Needed` with Yes/No options.
+- If Pre-Wire Required is Yes, `Pre-Wire Needed By Date` appears and is required; it maps to Projects `pre_wire_date`.
+- `Pre_Wire_Needed` maps to Projects `pre_wire_needed`.
+- If Schedule Expectation is By Deadline, `Customer Install Deadline Date` appears and is required; it maps to Projects `proposed_start_date`.
+- Next Available sends no customer deadline date.
+- Existing CAD multipicklist behavior and all prior project-creation changes are retained.
 
-Deploy `create_project.deluge` as the CRM standalone function named `create_project`.
+- Programming Required is automatically checked when Programming Hours is greater than 0.
+- Programming Information is required only when Programming Hours is greater than 0.
