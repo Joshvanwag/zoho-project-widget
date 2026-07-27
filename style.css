@@ -161,7 +161,7 @@ p {
 }
 
 .required-group-label {
-  color: #4f46e5;
+  color: #60a5fa;
 }
 
 .optional-group-label {
@@ -202,8 +202,8 @@ input:focus,
 textarea:focus,
 select:focus {
   outline: none;
-  border-color: #4f46e5;
-  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.15);
+  border-color: #60a5fa;
+  box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.22);
 }
 
 input:disabled,
@@ -334,8 +334,8 @@ select:disabled {
 .multi-picklist.open .multi-picklist-value-line,
 .multi-picklist:focus .multi-picklist-value-line {
   outline: none;
-  border-color: #4f46e5;
-  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.15);
+  border-color: #60a5fa;
+  box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.22);
 }
 
 .multi-picklist.disabled .multi-picklist-value-line {
@@ -549,7 +549,7 @@ input[type="date"]:disabled::-webkit-calendar-picker-indicator {
 }
 
 .toggle-switch input[type="checkbox"]:checked + .toggle-slider {
-  background: #4f46e5;
+  background: #60a5fa;
 }
 
 .toggle-switch input[type="checkbox"]:checked + .toggle-slider::before {
@@ -562,7 +562,7 @@ input[type="date"]:disabled::-webkit-calendar-picker-indicator {
 }
 
 .toggle-switch input[type="checkbox"]:focus-visible + .toggle-slider {
-  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.25);
+  box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.28);
 }
 
 .so-section {
@@ -640,40 +640,71 @@ input[type="date"]:disabled::-webkit-calendar-picker-indicator {
 
 .existing-info-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0;
-  padding: 0 18px 18px;
-}
-
-.existing-info-item {
-  min-width: 0;
-  padding: 12px 14px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px 20px;
+  padding: 4px 18px 18px;
   border-top: 1px solid #e2e8f0;
 }
 
-/* Long text fields use their own full-width rows so neighboring columns do not
-   become unnecessarily tall when these values contain detailed descriptions. */
-.existing-info-item-full {
+.existing-info-grid .field-row {
+  margin-top: 12px;
+  margin-bottom: 0;
+}
+
+.existing-info-grid .field-row.span-2 {
   grid-column: 1 / -1;
 }
 
-.existing-info-label {
-  margin-bottom: 4px;
-  font-size: 12px;
-  font-weight: 700;
-  color: #64748b;
+.existing-info-grid .field-row.toggle-row {
+  margin-top: 14px;
 }
 
-.existing-info-value {
+.empty-picklist {
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+  padding: 10px 13px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background: #f3f4f6;
+  color: #6b7280;
   font-size: 14px;
-  color: #1f2937;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
+}
+
+input,
+textarea,
+.multi-picklist-value-line {
+  caret-color: #2563eb;
+}
+
+input::selection,
+textarea::selection {
+  background: #dbeafe;
+  color: #1e3a8a;
+}
+
+input[type="date"] {
+  accent-color: #60a5fa;
+}
+
+.single-picklist .multi-picklist-chips {
+  max-width: calc(100% - 8px);
+  overflow: hidden;
+}
+
+.single-picklist .multi-picklist-chip {
+  max-width: 100%;
+}
+
+.single-picklist .multi-picklist-chip > span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 @media (max-width: 900px) {
   .existing-info-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: 1fr;
   }
 }
 
@@ -682,7 +713,12 @@ input[type="date"]:disabled::-webkit-calendar-picker-indicator {
     align-items: flex-start;
   }
 
+  #fieldContainer,
   .existing-info-grid {
     grid-template-columns: 1fr;
   }
+}
+
+.existing-deal-info[open] {
+  overflow: visible;
 }
