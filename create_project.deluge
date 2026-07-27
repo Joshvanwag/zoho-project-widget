@@ -22,7 +22,7 @@ try
 	}
 
 	portalId = "724354547";
-	projectTemplateId = "1684307000013002547";
+	projectTemplateId = "1684307000012655127";
 	projectLayoutId = "1684307000004725041";
 	kickoffStatusId = "1684307000007196436";
 	ungroupedProjectGroupId = "1684307000000018001";
@@ -165,11 +165,6 @@ try
 		ifnull(deal.get("Work_Site_City"),"")
 	);
 
-	workSiteState = ifnull(
-		fieldValuesArg.get("Work_City_State"),
-		ifnull(deal.get("Work_City_State"),"")
-	);
-
 	stateSelection = ifnull(
 		fieldValuesArg.get("D_State_Selection"),
 		ifnull(deal.get("D_State_Selection"),"")
@@ -224,12 +219,14 @@ try
 	preWireDate = ifnull(fieldValuesArg.get("pre_wire_date"),"");
 	proposedStartDate = ifnull(fieldValuesArg.get("proposed_start_date"),"");
 	lineDrawingInformation = ifnull(fieldValuesArg.get("sow_and_ld_information"),"");
-
 	cadNeeded = fieldValuesArg.get("cad");
-
 	if(cadNeeded == null)
 	{
 		cadNeeded = List();
+	}
+	if(!cadNeeded.contains("Signal Flow Diagrams"))
+	{
+		cadNeeded.add("Signal Flow Diagrams");
 	}
 
 	if(dealType != "Install Deal")
@@ -277,6 +274,16 @@ try
 		missing.add("Billing Terms");
 	}
 
+	if(buildingName == "")
+	{
+		missing.add("Building Name");
+	}
+
+	if(roomName == "")
+	{
+		missing.add("Room Name");
+	}
+
 	if(address1 == "")
 	{
 		missing.add("Work Site Address");
@@ -285,6 +292,11 @@ try
 	if(city == "")
 	{
 		missing.add("Work Site City");
+	}
+
+	if(stateSelection == "")
+	{
+		missing.add("Work Site State");
 	}
 
 	if(zip == "")
@@ -427,7 +439,7 @@ try
 		"start_date",
 		zoho.currentdate.toString("yyyy-MM-dd")
 	);
-	projectParams.put("is_public_project",true);
+	projectParams.put("is_public_project",false);
 
 	// Status: Kickoff.
 	statusMap = Map();
@@ -453,28 +465,50 @@ try
 	ownerMap.put("zuid",joshZuid);
 	ownerMap.put("email",joshEmail);
 	projectParams.put("owner",ownerMap);
-
-	// Add required internal users.
+	// Add existing portal users to this private Project. Josh is already the owner.
 	projectUsers = List();
 
-	userEmails =
-	{
-		"joshv@goclearvista.com",
-		"ryanl@goclearvista.com",
-		"chrisi@goclearvista.com",
-		"daltonp@goclearvista.com",
-		"bubba@goclearvista.com",
-		"sethb@goclearvista.com",
-		"mindyb@goclearvista.com",
-		"spencere@goclearvista.com"
-	};
+	userMap = Map();
+	userMap.put("zpuid","1684307000015967041");
+	userMap.put("zuid","910837433");
+	userMap.put("email","ryanl@goclearvista.com");
+	projectUsers.add(userMap);
 
-	for each userEmail in userEmails
-	{
-		userMap = Map();
-		userMap.put("email",userEmail);
-		projectUsers.add(userMap);
-	}
+	userMap = Map();
+	userMap.put("zpuid","1684307000015310001");
+	userMap.put("zuid","905259774");
+	userMap.put("email","chrisi@goclearvista.com");
+	projectUsers.add(userMap);
+
+	userMap = Map();
+	userMap.put("zpuid","1684307000000034619");
+	userMap.put("zuid","724357594");
+	userMap.put("email","daltonp@goclearvista.com");
+	projectUsers.add(userMap);
+
+	userMap = Map();
+	userMap.put("zpuid","1684307000005450003");
+	userMap.put("zuid","787400734");
+	userMap.put("email","bubba@goclearvista.com");
+	projectUsers.add(userMap);
+
+	userMap = Map();
+	userMap.put("zpuid","1684307000000083055");
+	userMap.put("zuid","727058665");
+	userMap.put("email","sethb@goclearvista.com");
+	projectUsers.add(userMap);
+
+	userMap = Map();
+	userMap.put("zpuid","1684307000005505007");
+	userMap.put("zuid","798753840");
+	userMap.put("email","mindyb@goclearvista.com");
+	projectUsers.add(userMap);
+
+	userMap = Map();
+	userMap.put("zpuid","1684307000000091786");
+	userMap.put("zuid","727123878");
+	userMap.put("email","spencere@goclearvista.com");
+	projectUsers.add(userMap);
 
 	projectParams.put("users",projectUsers);
 
@@ -490,7 +524,6 @@ try
 	projectParams.put("work_site_address",address1);
 	projectParams.put("work_site_address_2",address2);
 	projectParams.put("work_site_city",city);
-	projectParams.put("work_site_state",workSiteState);
 	projectParams.put("work_site_state_selection",stateSelection);
 	projectParams.put("work_site_zip",zip);
 	projectParams.put("primary_contact_name",primaryContactName);
@@ -543,11 +576,8 @@ try
 		);
 	}
 
-	// CAD is a Projects multipicklist and must be submitted as a List.
-	if(cadNeeded != null && cadNeeded.size() > 0)
-	{
-		projectParams.put("cad",cadNeeded);
-	}
+	// CAD is a Projects multipicklist. Signal Flow Diagrams is always enforced.
+	projectParams.put("cad",cadNeeded);
 
 	headersMap = Map();
 	headersMap.put("Content-Type","application/json");
@@ -638,55 +668,7 @@ try
 		return result.toString();
 	}
 
-	verifyResponse = invokeurl
-	[
-		url :"https://projectsapi.zoho.com/api/v3/portal/" + portalId + "/projects/" + projectId
-		type :GET
-		connection:"projects"
-	];
-
-	if(
-		verifyResponse == null ||
-		verifyResponse.containsKey("error")
-	)
-	{
-		result = Map();
-		result.put("success",false);
-		result.put(
-			"message",
-			"Project may have been created, but Zoho Projects could not verify it."
-		);
-		result.put("project_id",projectId);
-		result.put("project_key",projectKey);
-		result.put("project_name",projectName);
-		return result.toString();
-	}
-
-	// Verify that the source template generated tasks.
-	taskInfo = verifyResponse.get("tasks");
-	taskCount = 0;
-
-	if(taskInfo != null)
-	{
-		taskCount =
-			ifnull(taskInfo.get("open_count"),0) +
-			ifnull(taskInfo.get("closed_count"),0);
-	}
-
-	if(taskCount == 0)
-	{
-		result = Map();
-		result.put("success",false);
-		result.put(
-			"message",
-			"Project was created, but no template tasks were found."
-		);
-		result.put("project_id",projectId);
-		result.put("project_key",projectKey);
-		result.put("project_name",projectName);
-		return result.toString();
-	}
-
+	// Link the Project to the CRM Deal immediately after creation.
 	assocData = Map();
 	assocData.put("name",projectName);
 	assocData.put("project_id",projectId);
@@ -714,51 +696,88 @@ try
 	{
 		result = Map();
 		result.put("success",false);
-		result.put(
-			"message",
-			"Project was created, but CRM did not return a response when linking it to the Deal."
-		);
+		result.put("message","Project was created, but CRM did not return a response when linking it to the Deal.");
 		result.put("project_id",projectId);
 		result.put("project_key",projectKey);
 		result.put("project_name",projectName);
 		return result.toString();
 	}
 
+	associationSuccessful = true;
+	associationMessage = "";
+
 	if(assocResponse.containsKey("code"))
 	{
 		assocCode = ifnull(assocResponse.get("code"),"");
-
-		if(assocCode != "" && assocCode != "SUCCESS")
+		if(assocCode != "" && assocCode != "SUCCESS" && assocCode != "PROJECT_ASSOCIATED")
 		{
-			assocMessage = ifnull(
-				assocResponse.get("message"),
-				"Project was created, but CRM association failed."
-			);
-
-			result = Map();
-			result.put("success",false);
-			result.put(
-				"message",
-				"Project was created, but CRM association failed: " +
-				assocMessage
-			);
-			result.put("project_id",projectId);
-			result.put("project_key",projectKey);
-			result.put("project_name",projectName);
-			return result.toString();
+			associationSuccessful = false;
+			associationMessage = ifnull(assocResponse.get("message"),"Project was created, but CRM association failed.");
 		}
+	}
+
+	if(assocResponse.containsKey("data"))
+	{
+		assocResponseData = assocResponse.get("data");
+		if(assocResponseData != null && assocResponseData.size() > 0)
+		{
+			firstAssocResult = assocResponseData.get(0);
+			assocStatus = ifnull(firstAssocResult.get("status"),"");
+			assocResultCode = ifnull(firstAssocResult.get("code"),"");
+			if(assocStatus != "success" && assocResultCode != "PROJECT_ASSOCIATED")
+			{
+				associationSuccessful = false;
+				associationMessage = ifnull(firstAssocResult.get("message"),"Project was created, but CRM association failed.");
+			}
+		}
+	}
+
+	if(!associationSuccessful)
+	{
+		result = Map();
+		result.put("success",false);
+		result.put("message","Project was created, but CRM association failed: " + associationMessage);
+		result.put("project_id",projectId);
+		result.put("project_key",projectKey);
+		result.put("project_name",projectName);
+		return result.toString();
+	}
+
+	// Template task copying is asynchronous, so this verification is informational only.
+	taskCount = 0;
+	try
+	{
+		verifyResponse = invokeurl
+		[
+			url :"https://projectsapi.zoho.com/api/v3/portal/" + portalId + "/projects/" + projectId
+			type :GET
+			connection:"projects"
+		];
+
+		if(verifyResponse != null && !verifyResponse.containsKey("error"))
+		{
+			taskInfo = verifyResponse.get("tasks");
+			if(taskInfo != null)
+			{
+				taskCount = ifnull(taskInfo.get("open_count"),0) + ifnull(taskInfo.get("closed_count"),0);
+			}
+		}
+	}
+	catch(verifyErr)
+	{
+		// Do not fail project creation because verification or template copying is delayed.
 	}
 
 	result = Map();
 	result.put("success",true);
 	result.put(
 		"message",
-		"Project created from template, verified, and linked successfully."
+		"Private project created from template and linked successfully."
 	);
 	result.put("project_id",projectId);
 	result.put("project_key",projectKey);
 	result.put("project_name",projectName);
-	result.put("task_count",taskCount);
+	result.put("task_count_at_verification",taskCount);
 
 	return result.toString();
 }

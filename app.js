@@ -252,11 +252,30 @@ function fieldSource(field) {
   return field.source || "deal";
 }
 
+function getLockedValues(field) {
+  return Array.isArray(field.lockedValues) ? field.lockedValues : [];
+}
+
+function enforceLockedValues(field, value) {
+  if (field.type !== "multipicklist") return value;
+
+  const selectedValues = Array.isArray(value) ? [...value] : [];
+  getLockedValues(field).forEach(lockedValue => {
+    if (!selectedValues.includes(lockedValue)) selectedValues.push(lockedValue);
+  });
+  return selectedValues;
+}
+
 function getCurrentConfiguredValue(field) {
+  let value;
+
   if (Object.prototype.hasOwnProperty.call(state.draftValues, field.apiName)) {
-    return state.draftValues[field.apiName];
+    value = state.draftValues[field.apiName];
+  } else {
+    value = fieldSource(field) === "deal" ? getDealFieldValue(field.apiName) : null;
   }
-  return fieldSource(field) === "deal" ? getDealFieldValue(field.apiName) : null;
+
+  return enforceLockedValues(field, value);
 }
 
 function formatExistingDealValue(field, value) {
@@ -445,6 +464,12 @@ function renderFields() {
         const option = document.createElement("option");
         option.value = optionData.value;
         option.textContent = optionData.label;
+
+        if (getLockedValues(field).includes(optionData.value)) {
+          option.selected = true;
+          option.disabled = true;
+        }
+
         input.appendChild(option);
       });
     } else {
@@ -468,7 +493,9 @@ function renderFields() {
       const toggleOptionValue = getPicklistOptions(field)[0].value;
       input.checked = Array.isArray(currentValue) && currentValue.includes(toggleOptionValue);
     } else if (field.type === "multipicklist" && Array.isArray(currentValue)) {
-      Array.from(input.options).forEach(option => { option.selected = currentValue.includes(option.value); });
+      Array.from(input.options).forEach(option => {
+        option.selected = currentValue.includes(option.value) || getLockedValues(field).includes(option.value);
+      });
     } else {
       input.value = displayValue(currentValue);
     }
@@ -485,7 +512,12 @@ function renderFields() {
           const toggleOptionValue = getPicklistOptions(field)[0].value;
           return event.target.checked ? [toggleOptionValue] : [];
         }
-        if (field.type === "multipicklist") return Array.from(event.target.selectedOptions).map(option => option.value).filter(Boolean);
+        if (field.type === "multipicklist") {
+          const selectedValues = Array.from(event.target.selectedOptions)
+            .map(option => option.value)
+            .filter(Boolean);
+          return enforceLockedValues(field, selectedValues);
+        }
         return event.target.value;
       };
 
@@ -502,6 +534,11 @@ function renderFields() {
 
       input.addEventListener("change", event => {
         state.draftValues[field.apiName] = captureValue(event);
+        if (field.type === "multipicklist") {
+          Array.from(input.options).forEach(option => {
+            if (getLockedValues(field).includes(option.value)) option.selected = true;
+          });
+        }
         validateDeal();
         if (["picklist", "multipicklist", "checkbox"].includes(field.type)) renderStatus();
         else updateCreateButtonStateOnly();

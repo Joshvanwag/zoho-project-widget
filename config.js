@@ -30,13 +30,12 @@ window.PROJECT_WIDGET_CONFIG = {
     { apiName: "Programming_Required", label: "Programming Required", type: "checkbox", source: "deal", required: false, editable: true },
     { apiName: "Programming", label: "Programming Information", type: "textarea", source: "deal", required: true, editable: true },
 
-    { apiName: "Building_Name", label: "Building Name", type: "text", source: "deal", required: false, editable: true },
-    { apiName: "Room_Name", label: "Room Name", type: "text", source: "deal", required: false, editable: true },
+    { apiName: "Building_Name", label: "Building Name", type: "text", source: "deal", required: true, editable: true },
+    { apiName: "Room_Name", label: "Room Name", type: "text", source: "deal", required: true, editable: true },
     { apiName: "Work_Site_Address", label: "Work Site Address", type: "text", source: "deal", required: true, editable: true },
     { apiName: "Work_Site_Address_2", label: "Work Site Address 2", type: "text", source: "deal", required: false, editable: true },
     { apiName: "Work_Site_City", label: "Work Site City", type: "text", source: "deal", required: true, editable: true },
-    { apiName: "Work_City_State", label: "Work Site State", type: "text", source: "deal", required: false, editable: true },
-    { apiName: "D_State_Selection", label: "Work Site State Selection", type: "picklist", source: "deal", required: false, editable: true, options: ["Alabama - AL", "Alaska - AK", "Arizona - AZ", "Arkansas - AR", "California - CA", "Colorado - CO", "Connecticut - CT", "Delaware - DE", "Florida - FL", "Georgia - GA", "Hawaii - HI", "Idaho - ID", "Illinois - IL", "Indiana - IN", "Iowa - IA", "Kansas - KS", "Kentucky - KY", "Louisiana - LA", "Maine - ME", "Maryland - MD", "Massachusetts - MA", "Michigan - MI", "Minnesota - MN", "Mississippi - MS", "Missouri - MO", "Montana - MT", "Nebraska - NE", "Nevada - NV", "New Hampshire - NH", "New Jersey - NJ", "New Mexico - NM", "New York - NY", "North Carolina - NC", "North Dakota - ND", "Ohio - OH", "Oklahoma - OK", "Oregon - OR", "Pennsylvania - PA", "Rhode Island - RI", "South Carolina - SC", "South Dakota - SD", "Tennessee - TN", "Texas - TX", "Utah - UT", "Vermont - VT", "Virginia - VA", "Washington - WA", "West Virginia - WV", "Wisconsin - WI", "Wyoming - WY"] },
+    { apiName: "D_State_Selection", label: "Work Site State", type: "picklist", source: "deal", required: true, editable: true, options: ["Alabama - AL", "Alaska - AK", "Arizona - AZ", "Arkansas - AR", "California - CA", "Colorado - CO", "Connecticut - CT", "Delaware - DE", "Florida - FL", "Georgia - GA", "Hawaii - HI", "Idaho - ID", "Illinois - IL", "Indiana - IN", "Iowa - IA", "Kansas - KS", "Kentucky - KY", "Louisiana - LA", "Maine - ME", "Maryland - MD", "Massachusetts - MA", "Michigan - MI", "Minnesota - MN", "Mississippi - MS", "Missouri - MO", "Montana - MT", "Nebraska - NE", "Nevada - NV", "New Hampshire - NH", "New Jersey - NJ", "New Mexico - NM", "New York - NY", "North Carolina - NC", "North Dakota - ND", "Ohio - OH", "Oklahoma - OK", "Oregon - OR", "Pennsylvania - PA", "Rhode Island - RI", "South Carolina - SC", "South Dakota - SD", "Tennessee - TN", "Texas - TX", "Utah - UT", "Vermont - VT", "Virginia - VA", "Washington - WA", "West Virginia - WV", "Wisconsin - WI", "Wyoming - WY"] },
     { apiName: "Work_City_Zip_Code", label: "Work Site Zip", type: "text", source: "deal", required: true, editable: true },
 
     { apiName: "Installation_Hours", label: "Installation Hours", type: "decimal", source: "deal", required: true, editable: true },
@@ -49,7 +48,7 @@ window.PROJECT_WIDGET_CONFIG = {
     { apiName: "pre_wire_date", label: "Pre-Wire Date", type: "date", source: "project", required: false, editable: true },
     { apiName: "proposed_start_date", label: "Proposed Start Date", type: "date", source: "project", required: false, editable: true },
     { apiName: "sow_and_ld_information", label: "Line Drawing Information", type: "textarea", source: "project", required: false, editable: true },
-    { apiName: "cad", label: "CAD Needed", type: "multipicklist", source: "project", required: false, editable: true, options: ["CAD NEEDED"] }
+    { apiName: "cad", label: "CAD Needed", type: "multipicklist", source: "project", required: true, editable: true, lockedValues: ["Signal Flow Diagrams"], options: ["Cover Sheet", "Key Plan", "Equipment and Electrical - Floor Plans", "Equipment and Electrical - Reflected Ceiling Plans (RCP)", "Equipment and Electrical - Elevations", "Signal Flow Diagrams", "Product Details", "Standards of Practice - Sign Off"] }
   ],
 
   showDebug: false,
