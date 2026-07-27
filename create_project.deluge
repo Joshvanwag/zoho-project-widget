@@ -210,7 +210,7 @@ try
 		ifnull(deal.get("Pre_Wire_Needed"),"")
 	);
 
-	// Project-only conditional date fields.
+	// Conditional Project-only date fields.
 	preWireDate = ifnull(fieldValuesArg.get("pre_wire_date"),"");
 	proposedStartDate = ifnull(fieldValuesArg.get("proposed_start_date"),"");
 	lineDrawingInformation = ifnull(fieldValuesArg.get("sow_and_ld_information"),"");
@@ -313,18 +313,15 @@ try
 	{
 		missing.add("Schedule Expectation");
 	}
-	else if(scheduleExpectation != "Next available" && scheduleExpectation != "By Deadline (date needed)")
-	{
-		missing.add("Valid Schedule Expectation");
-	}
 
 	if(preWireNeeded == "")
 	{
 		missing.add("Pre-Wire Required");
 	}
-	else if(preWireNeeded != "Yes" && preWireNeeded != "No")
+
+	if(preWireNeeded != "" && preWireNeeded != "Yes" && preWireNeeded != "No")
 	{
-		missing.add("Valid Pre-Wire Required value");
+		missing.add("Pre-Wire Required must be Yes or No");
 	}
 
 	if(preWireNeeded == "Yes" && preWireDate == "")
@@ -335,6 +332,11 @@ try
 	if(scheduleExpectation == "By Deadline (date needed)" && proposedStartDate == "")
 	{
 		missing.add("Customer Install Deadline Date");
+	}
+
+	if(scheduleExpectation != "Next available" && scheduleExpectation != "By Deadline (date needed)")
+	{
+		missing.add("Schedule Expectation must be Next available or By Deadline (date needed)");
 	}
 
 	if(missing.size() > 0)
