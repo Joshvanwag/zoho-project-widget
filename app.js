@@ -539,26 +539,22 @@ function createSinglePicklistControl(field, currentValue, isDisabled, optionsOve
   let selectedValue = valueIsEmpty(currentValue) ? "" : String(currentValue);
 
   const control = document.createElement("div");
-  control.className = "multi-picklist single-picklist";
+  control.className = "single-picklist";
   control.tabIndex = isDisabled ? -1 : 0;
   if (isDisabled) control.classList.add("disabled");
 
   const valueLine = document.createElement("div");
-  valueLine.className = "multi-picklist-value-line";
+  valueLine.className = "single-picklist-value-line";
 
-  const chips = document.createElement("div");
-  chips.className = "multi-picklist-chips";
-
-  const placeholder = document.createElement("span");
-  placeholder.className = "multi-picklist-placeholder";
-  placeholder.textContent = `Select ${field.label}...`;
+  const display = document.createElement("span");
+  display.className = "single-picklist-display";
 
   const caret = document.createElement("span");
-  caret.className = "multi-picklist-caret";
+  caret.className = "single-picklist-caret";
   caret.setAttribute("aria-hidden", "true");
 
   const menu = document.createElement("div");
-  menu.className = "multi-picklist-menu hidden";
+  menu.className = "single-picklist-menu hidden";
 
   function commit(value) {
     selectedValue = value;
@@ -575,45 +571,24 @@ function createSinglePicklistControl(field, currentValue, isDisabled, optionsOve
   }
 
   function renderControl() {
-    chips.innerHTML = "";
     const selectedOption = options.find(option => String(option.value) === selectedValue);
+    display.textContent = selectedOption ? selectedOption.label : `Select ${field.label}...`;
+    display.classList.toggle("placeholder", !selectedOption);
 
-    if (selectedOption) {
-      const chip = document.createElement("span");
-      chip.className = "multi-picklist-chip";
-
-      const chipText = document.createElement("span");
-      chipText.textContent = selectedOption.label;
-      chip.appendChild(chipText);
-
-      if (!isDisabled) {
-        const removeButton = document.createElement("button");
-        removeButton.type = "button";
-        removeButton.className = "multi-picklist-remove";
-        removeButton.setAttribute("aria-label", `Clear ${field.label}`);
-        removeButton.textContent = "×";
-        removeButton.addEventListener("click", event => {
-          event.stopPropagation();
-          commit("");
-          renderControl();
-        });
-        chip.appendChild(removeButton);
-      }
-      chips.appendChild(chip);
-    }
-
-    placeholder.classList.toggle("hidden", Boolean(selectedOption));
     menu.innerHTML = "";
-
-    const availableOptions = options.filter(option => String(option.value) !== selectedValue);
-    availableOptions.forEach(optionData => {
+    options.forEach(optionData => {
+      const optionValue = String(optionData.value);
       const item = document.createElement("button");
       item.type = "button";
-      item.className = "multi-picklist-option";
+      item.className = "single-picklist-option";
       item.textContent = optionData.label;
+      if (optionValue === selectedValue) {
+        item.classList.add("selected");
+        item.setAttribute("aria-selected", "true");
+      }
       item.addEventListener("click", event => {
         event.stopPropagation();
-        commit(String(optionData.value));
+        commit(optionValue);
         renderControl();
         closeMenu();
       });
@@ -623,10 +598,10 @@ function createSinglePicklistControl(field, currentValue, isDisabled, optionsOve
 
   function openMenu() {
     if (isDisabled) return;
-    document.querySelectorAll(".multi-picklist.open").forEach(other => {
+    document.querySelectorAll(".multi-picklist.open, .single-picklist.open").forEach(other => {
       if (other !== control) {
         other.classList.remove("open");
-        other.querySelector(".multi-picklist-menu")?.classList.add("hidden");
+        other.querySelector(".multi-picklist-menu, .single-picklist-menu")?.classList.add("hidden");
       }
     });
     menu.classList.remove("hidden");
@@ -638,8 +613,7 @@ function createSinglePicklistControl(field, currentValue, isDisabled, optionsOve
     control.classList.remove("open");
   }
 
-  valueLine.appendChild(chips);
-  valueLine.appendChild(placeholder);
+  valueLine.appendChild(display);
   valueLine.appendChild(caret);
   control.appendChild(valueLine);
   control.appendChild(menu);
@@ -656,7 +630,9 @@ function createSinglePicklistControl(field, currentValue, isDisabled, optionsOve
         event.preventDefault();
         if (menu.classList.contains("hidden")) openMenu();
         else closeMenu();
-      } else if (event.key === "Escape") closeMenu();
+      } else if (event.key === "Escape") {
+        closeMenu();
+      }
     });
 
     document.addEventListener("click", event => {
@@ -666,143 +642,6 @@ function createSinglePicklistControl(field, currentValue, isDisabled, optionsOve
 
   renderControl();
   return control;
-}
-
-function activateDatePicker(input) {
-  if (!input || input.type !== "date" || input.disabled) return;
-  input.addEventListener("click", () => {
-    try {
-      if (typeof input.showPicker === "function") input.showPicker();
-    } catch (error) {}
-  });
-}
-
-function createFieldRow(field, context = "missing") {
-  const row = document.createElement("div");
-  row.className = "field-row";
-  if (context === "existing") row.classList.add("existing-edit-row");
-  if (fieldIsRequired(field)) row.classList.add("required-field");
-
-  const isToggle = field.type === "checkbox" || isSingleOptionToggle(field);
-  const isDisabled = !fieldIsEditable(field) || state.isBusy;
-  const inputId = `${context}-${field.apiName}`;
-
-  const label = document.createElement("label");
-  label.setAttribute("for", inputId);
-  label.appendChild(document.createTextNode(field.label + " "));
-  if (fieldIsRequired(field)) {
-    const star = document.createElement("span");
-    star.className = "required-star";
-    star.textContent = "*";
-    label.appendChild(star);
-  }
-
-  let input;
-  const currentValue = getCurrentConfiguredValue(field);
-
-  if (field.type === "multipicklist") {
-    input = createMultiPicklistControl(field, currentValue, isDisabled);
-    input.id = inputId;
-    row.classList.add("span-2");
-  } else if (field.type === "picklist") {
-    input = createSinglePicklistControl(field, currentValue, isDisabled);
-    input.id = inputId;
-  } else if (isToggle) {
-    const checkbox = document.createElement("input");
-    checkbox.type = "checkbox";
-    checkbox.id = inputId;
-    checkbox.name = field.apiName;
-
-    const toggleWrap = document.createElement("label");
-    toggleWrap.className = "toggle-switch";
-    toggleWrap.setAttribute("for", inputId);
-
-    const slider = document.createElement("span");
-    slider.className = "toggle-slider";
-    toggleWrap.appendChild(checkbox);
-    toggleWrap.appendChild(slider);
-
-    row.classList.add("toggle-row");
-    input = checkbox;
-    input._toggleWrap = toggleWrap;
-  } else if (field.type === "textarea") {
-    input = document.createElement("textarea");
-    input.rows = 4;
-    input.id = inputId;
-    input.name = field.apiName;
-    row.classList.add("span-2");
-  } else {
-    input = document.createElement("input");
-    input.id = inputId;
-    input.name = field.apiName;
-    if (field.type === "date") input.type = "date";
-    else if (["currency", "decimal", "number"].includes(field.type)) input.type = "number";
-    else input.type = "text";
-
-    if (["Description", "Description_of_Work_2", "Work_Site_Address"].includes(field.apiName)) {
-      row.classList.add("span-2");
-    }
-  }
-
-  if (!["multipicklist", "picklist"].includes(field.type)) {
-    if (field.type === "checkbox") {
-      input.checked = currentValue === true || String(currentValue).toLowerCase() === "true" || String(currentValue).toLowerCase() === "yes";
-    } else if (isSingleOptionToggle(field)) {
-      const toggleOptionValue = getPicklistOptions(field)[0].value;
-      input.checked = Array.isArray(currentValue) && currentValue.includes(toggleOptionValue);
-    } else {
-      input.value = displayValue(currentValue);
-    }
-
-    input.disabled = isDisabled;
-    if (!isToggle) input.placeholder = input.disabled ? "Edit this field on the Deal record" : `Enter ${field.label}`;
-    activateDatePicker(input);
-
-    if (!isDisabled) {
-      const captureValue = event => {
-        if (field.type === "checkbox") return event.target.checked;
-        if (isSingleOptionToggle(field)) {
-          const toggleOptionValue = getPicklistOptions(field)[0].value;
-          return event.target.checked ? [toggleOptionValue] : [];
-        }
-        return event.target.value;
-      };
-
-      input.addEventListener("input", event => {
-        state.draftValues[field.apiName] = captureValue(event);
-        validateDeal();
-
-        if (field.apiName === "Programming_Hours" && programmingHoursAreGreaterThanZero()) {
-          document.querySelectorAll('input[name="Programming_Required"]').forEach(checkbox => {
-            checkbox.checked = true;
-          });
-        }
-
-        updateCreateButtonStateOnly();
-      });
-
-      input.addEventListener("change", event => {
-        state.draftValues[field.apiName] = captureValue(event);
-        validateDeal();
-        const controlsConditionalField = (cfg.fields || []).some(candidate =>
-          candidate.showWhen?.apiName === field.apiName || candidate.requiredWhen?.apiName === field.apiName
-        );
-        if (controlsConditionalField) render();
-        else renderStatus();
-      });
-    }
-  }
-
-  row.appendChild(label);
-  row.appendChild(field.type === "multipicklist" || field.type === "picklist" ? input : (isToggle ? input._toggleWrap : input));
-
-  if (isDisabled && !state.isBusy) {
-    const note = document.createElement("small");
-    note.textContent = "This field must be edited on the Deal record.";
-    row.appendChild(note);
-  }
-
-  return row;
 }
 
 function renderFields() {
