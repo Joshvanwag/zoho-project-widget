@@ -1368,8 +1368,9 @@ async function createProject() {
     const uniqueWarnings = [...new Set(warnings.filter(Boolean))];
     const hoursApplied = isFlagTrue(hoursDetails?.hours_applied) || Number(hoursDetails?.tasks_updated || 0) > 0;
     let successText = `Project created successfully.${projectName}`.trim();
-    if (Number(details.pdf_uploads?.length || 0) > 0) {
-      successText += ` Uploaded ${details.pdf_uploads.length} PDF(s) to project documents.`;
+    const pdfCount = Number(hoursDetails?.pdf_uploads?.length || details.pdf_uploads?.length || 0);
+    if (pdfCount > 0) {
+      successText += ` Uploaded ${pdfCount} PDF(s) to project documents.`;
     }
     if (hoursApplied) {
       const appliedCount = Number(hoursDetails.tasks_updated || 0);
