@@ -860,7 +860,74 @@ try
 	hoursPending = false;
 	hoursApplied = false;
 	hoursReady = false;
-	documentsUrl = "https://projectsapi.zoho.com/restapi/portal/" + portalId + "/projects/" + projectId + "/documents/";
+	workdriveFolderId = "";
+	if(!applyHoursOnly)
+	{
+		try
+		{
+			docsMeta = invokeurl
+			[
+				url :"https://projectsapi.zoho.com/api/v3/portal/" + portalId + "/projects/" + projectId + "/documents"
+				type :GET
+				connection:"projects"
+			];
+			if(docsMeta != null)
+			{
+				workdriveFolderId = ifnull(docsMeta.get("workdrive_folder_id"),ifnull(docsMeta.get("thirdparty_folder_id"),"")).toString();
+				if(workdriveFolderId == "" && docsMeta.get("folder") != null)
+				{
+					workdriveFolderId = ifnull(docsMeta.get("folder").get("workdrive_folder_id"),ifnull(docsMeta.get("folder").get("id"),"")).toString();
+				}
+				if(workdriveFolderId == "" && docsMeta.get("documents") != null)
+				{
+					docsObj = docsMeta.get("documents");
+					workdriveFolderId = ifnull(docsObj.get("workdrive_folder_id"),ifnull(docsObj.get("thirdparty_folder_id"),"")).toString();
+				}
+			}
+		}
+		catch(docsMetaErr)
+		{
+			workdriveFolderId = "";
+		}
+		if(workdriveFolderId == "")
+		{
+			try
+			{
+				foldersMeta = invokeurl
+				[
+					url :"https://projectsapi.zoho.com/api/v3/portal/" + portalId + "/projects/" + projectId + "/folders"
+					type :GET
+					connection:"projects"
+				];
+				folderRows = null;
+				if(foldersMeta != null && foldersMeta.get("folders") != null)
+				{
+					folderRows = foldersMeta.get("folders");
+				}
+				else if(foldersMeta != null && foldersMeta.get("data") != null)
+				{
+					folderRows = foldersMeta.get("data");
+				}
+				if(folderRows != null && folderRows.size() > 0)
+				{
+					firstFolder = folderRows.get(0);
+					workdriveFolderId = ifnull(firstFolder.get("workdrive_folder_id"),ifnull(firstFolder.get("id"),ifnull(firstFolder.get("res_id"),""))).toString();
+				}
+				else if(foldersMeta != null)
+				{
+					workdriveFolderId = ifnull(foldersMeta.get("workdrive_folder_id"),"").toString();
+				}
+			}
+			catch(foldersMetaErr)
+			{
+				workdriveFolderId = "";
+			}
+		}
+		if(workdriveFolderId == "")
+		{
+			warnings.add("Could not find the project's WorkDrive Documents folder, so PDFs were not uploaded. Add ZohoProjects.documents.READ and WorkDrive.files.ALL to the projects connection.");
+		}
+	}
 
 	// PDF uploads and task-hour updates must never fail project creation.
 	try
@@ -1085,6 +1152,12 @@ try
 
 				if(latestPdf.get("id") != null)
 				{
+					if(workdriveFolderId == "")
+					{
+						warnings.add("Price sheet PDF was found but not uploaded because the project Documents folder could not be resolved.");
+					}
+					else
+					{
 					pdfFile = invokeurl
 					[
 						url :"https://www.zohoapis.com/crm/v2/Install_Price_Sheets/" + priceSheetId + "/Attachments/" + latestPdf.get("id")
@@ -1096,16 +1169,77 @@ try
 					{
 						uploadName = "Install Price Sheet - SQ " + crmQuoteNumber;
 					}
-					pdfFile.setFileName(uploadName + ".pdf");
-					pdfFile.setParamName("uploaddoc");
-					uploadResponse = invokeurl
-					[
-						url :documentsUrl
-						type :POST
-						files:pdfFile
-						connection:"projects"
-					];
-					pdfUploads.add("price_sheet");
+					pdfFileName = uploadName + ".pdf";
+					pdfUploaded = false;
+					try
+					{
+						pdfFile.setFileName(pdfFileName);
+						pdfFile.setParamName("upload_file");
+						uploadParams = Map();
+						uploadParams.put("service","workdrive");
+						uploadResponse = invokeurl
+						[
+							url :"https://projectsapi.zoho.com/api/v3/portal/" + portalId + "/documents/thirdparty/files/" + workdriveFolderId
+							type :POST
+							parameters:uploadParams
+							files:pdfFile
+							connection:"projects"
+						];
+						if(uploadResponse != null)
+						{
+							uploadText = uploadResponse.toString().toLowerCase();
+							if((uploadText.contains("\"id\"") || uploadText.contains("resource_id") || uploadText.contains("\"data\"")) && !uploadText.contains("invalid_oauthscope") && !uploadText.contains("unauthorized") && !uploadText.contains("forbidden") && !uploadText.contains("\"error\""))
+							{
+								pdfUploaded = true;
+							}
+							else if(uploadText.contains("invalid_oauthscope") || uploadText.contains("unauthorized"))
+							{
+								warnings.add("Price sheet PDF upload needs WorkDrive.files.ALL and ZohoProjects.documents.CREATE on the projects connection.");
+							}
+							else
+							{
+								warnings.add("Price sheet PDF upload was rejected: " + uploadResponse.toString());
+							}
+						}
+					}
+					catch(priceSheetV3Err)
+					{
+						pdfUploaded = false;
+					}
+					if(!pdfUploaded)
+					{
+						try
+						{
+							pdfFileRetry = invokeurl
+							[
+								url :"https://www.zohoapis.com/crm/v2/Install_Price_Sheets/" + priceSheetId + "/Attachments/" + latestPdf.get("id")
+								type :GET
+								connection:"zcrm"
+							];
+							wdResponse = zoho.workdrive.uploadFile(pdfFileRetry,workdriveFolderId,encodeUrl(pdfFileName),true,"projects");
+							if(wdResponse != null)
+							{
+								wdText = wdResponse.toString().toLowerCase();
+								if((wdText.contains("\"id\"") || wdText.contains("resource_id") || wdText.contains("\"data\"")) && !wdText.contains("invalid_oauthscope") && !wdText.contains("unauthorized") && !wdText.contains("\"error\""))
+								{
+									pdfUploaded = true;
+								}
+								else
+								{
+									warnings.add("Price sheet PDF WorkDrive upload failed: " + wdResponse.toString());
+								}
+							}
+						}
+						catch(priceSheetWdErr)
+						{
+							warnings.add("Price sheet PDF upload failed: " + priceSheetWdErr.toString());
+						}
+					}
+					if(pdfUploaded)
+					{
+						pdfUploads.add("price_sheet");
+					}
+					}
 				}
 				else
 				{
@@ -1317,7 +1451,6 @@ try
 					connection:"books"
 				];
 				soPdf.setFileName("SO " + selectedSONumber + ".pdf");
-				soPdf.setParamName("uploaddoc");
 				hasSoPdf = true;
 			}
 			catch(soPdfErr)
@@ -1327,14 +1460,82 @@ try
 
 			if(hasSoPdf)
 			{
-				soUploadResponse = invokeurl
-				[
-					url :documentsUrl
-					type :POST
-					files:soPdf
-					connection:"projects"
-				];
-				pdfUploads.add("sales_order");
+				if(workdriveFolderId == "")
+				{
+					warnings.add("Sales Order PDF was generated but not uploaded because the project Documents folder could not be resolved.");
+				}
+				else
+				{
+				soUploaded = false;
+				try
+				{
+					soPdf.setParamName("upload_file");
+					soUploadParams = Map();
+					soUploadParams.put("service","workdrive");
+					soUploadResponse = invokeurl
+					[
+						url :"https://projectsapi.zoho.com/api/v3/portal/" + portalId + "/documents/thirdparty/files/" + workdriveFolderId
+						type :POST
+						parameters:soUploadParams
+						files:soPdf
+						connection:"projects"
+					];
+					if(soUploadResponse != null)
+					{
+						soUploadText = soUploadResponse.toString().toLowerCase();
+						if((soUploadText.contains("\"id\"") || soUploadText.contains("resource_id") || soUploadText.contains("\"data\"")) && !soUploadText.contains("invalid_oauthscope") && !soUploadText.contains("unauthorized") && !soUploadText.contains("forbidden") && !soUploadText.contains("\"error\""))
+						{
+							soUploaded = true;
+						}
+						else if(soUploadText.contains("invalid_oauthscope") || soUploadText.contains("unauthorized"))
+						{
+							warnings.add("Sales Order PDF upload needs WorkDrive.files.ALL and ZohoProjects.documents.CREATE on the projects connection.");
+						}
+						else
+						{
+							warnings.add("Sales Order PDF upload was rejected: " + soUploadResponse.toString());
+						}
+					}
+				}
+				catch(soV3Err)
+				{
+					soUploaded = false;
+				}
+				if(!soUploaded)
+				{
+					try
+					{
+						soPdfRetry = invokeurl
+						[
+							url :"https://www.zohoapis.com/books/v3/salesorders/" + salesOrderId + "?organization_id=" + booksOrgId + "&accept=pdf"
+							type :GET
+							connection:"books"
+						];
+						soPdfRetry.setFileName("SO " + selectedSONumber + ".pdf");
+						soWdResponse = zoho.workdrive.uploadFile(soPdfRetry,workdriveFolderId,encodeUrl("SO " + selectedSONumber + ".pdf"),true,"projects");
+						if(soWdResponse != null)
+						{
+							soWdText = soWdResponse.toString().toLowerCase();
+							if((soWdText.contains("\"id\"") || soWdText.contains("resource_id") || soWdText.contains("\"data\"")) && !soWdText.contains("invalid_oauthscope") && !soWdText.contains("unauthorized") && !soWdText.contains("\"error\""))
+							{
+								soUploaded = true;
+							}
+							else
+							{
+								warnings.add("Sales Order PDF WorkDrive upload failed: " + soWdResponse.toString());
+							}
+						}
+					}
+					catch(soWdErr)
+					{
+						warnings.add("Sales Order PDF upload failed: " + soWdErr.toString());
+					}
+				}
+				if(soUploaded)
+				{
+					pdfUploads.add("sales_order");
+				}
+				}
 			}
 			else
 			{
@@ -1552,33 +1753,108 @@ try
 
 				try
 				{
-					creatorSheetId = ifnull(priceSheet.get("Creator_Record_ID"),"").toString();
-					if(creatorSheetId == "")
+					creatorSheetId = "";
+					creatorRef = priceSheet.get("Creator_Record_ID");
+					try
 					{
-						try
+						if(creatorRef != null && creatorRef.get("ID") != null)
 						{
-							creatorSearch = zoho.creator.getRecords("tvspro","application-by-chris","All_Price_Sheets","CRM_Install_Price_Sheet_ID == \"" + priceSheetId + "\"",1,1,"creator_connection");
-							try
-							{
-								if(creatorSearch.containsKey("data"))
-								{
-									creatorSearch = creatorSearch.get("data");
-								}
-							}
-							catch(unwrapCreatorSearchErr)
-							{
-							}
-							if(creatorSearch != null && creatorSearch.size() > 0)
-							{
-								creatorSheetId = ifnull(creatorSearch.get(0).get("ID"),"").toString();
-							}
+							creatorSheetId = creatorRef.get("ID").toString();
 						}
-						catch(creatorSearchErr)
+						else if(creatorRef != null && creatorRef.get("id") != null)
 						{
+							creatorSheetId = creatorRef.get("id").toString();
 						}
 					}
+					catch(creatorRefErr)
+					{
+						creatorSheetId = ifnull(creatorRef,"").toString();
+					}
 					soldLookups = List();
-					if(creatorSheetId != "")
+					try
+					{
+						creatorResp = null;
+						if(priceSheetId != "")
+						{
+							creatorResp = invokeurl
+							[
+								url :"https://www.zohoapis.com/creator/v2.1/data/tvspro/application-by-chris/report/All_Price_Sheets?criteria=" + encodeUrl("CRM_Install_Price_Sheet_ID == \"" + priceSheetId + "\"") + "&field_config=all&max_records=10"
+								type :GET
+								connection:"creator_connection"
+							];
+						}
+						if((creatorResp == null || creatorResp.get("data") == null) && creatorSheetId != "")
+						{
+							creatorResp = invokeurl
+							[
+								url :"https://www.zohoapis.com/creator/v2.1/data/tvspro/application-by-chris/report/All_Price_Sheets/" + creatorSheetId + "?field_config=all"
+								type :GET
+								connection:"creator_connection"
+							];
+						}
+						if((creatorResp == null || creatorResp.get("data") == null) && priceSheetId != "")
+						{
+							creatorResp = invokeurl
+							[
+								url :"https://www.zohoapis.com/creator/v2/data/tvspro/application-by-chris/report/All_Price_Sheets?criteria=" + encodeUrl("CRM_Install_Price_Sheet_ID == \"" + priceSheetId + "\"")
+								type :GET
+								connection:"creator_connection"
+							];
+						}
+						if((creatorResp == null || creatorResp.get("data") == null) && creatorSheetId != "")
+						{
+							creatorResp = invokeurl
+							[
+								url :"https://www.zohoapis.com/creator/v2/data/tvspro/application-by-chris/report/All_Price_Sheets/" + creatorSheetId
+								type :GET
+								connection:"creator_connection"
+							];
+						}
+						if(creatorResp != null && creatorResp.get("data") != null)
+						{
+							creatorData = creatorResp.get("data");
+							searchSheet = null;
+							try
+							{
+								if(creatorData.get("Line_Item_Lookup") != null || creatorData.get("ID") != null)
+								{
+									searchSheet = creatorData;
+								}
+							}
+							catch(singleRecordErr)
+							{
+								searchSheet = null;
+							}
+							if(searchSheet == null)
+							{
+								try
+								{
+									if(creatorData.size() > 0)
+									{
+										searchSheet = creatorData.get(0);
+									}
+								}
+								catch(listRecordErr)
+								{
+								}
+							}
+							if(searchSheet != null)
+							{
+								if(ifnull(searchSheet.get("ID"),"").toString() != "")
+								{
+									creatorSheetId = searchSheet.get("ID").toString();
+								}
+								if(searchSheet.get("Line_Item_Lookup") != null)
+								{
+									soldLookups = searchSheet.get("Line_Item_Lookup");
+								}
+							}
+						}
+					}
+					catch(creatorApiErr)
+					{
+					}
+					if((soldLookups == null || soldLookups.size() <= 0) && creatorSheetId != "")
 					{
 						try
 						{
@@ -1597,63 +1873,13 @@ try
 						{
 						}
 					}
-					if((soldLookups == null || soldLookups.size() <= 0))
-					{
-						try
-						{
-							creatorSearchRows = null;
-							if(priceSheetId != "")
-							{
-								creatorSearchRows = zoho.creator.getRecords("tvspro","application-by-chris","All_Price_Sheets","CRM_Install_Price_Sheet_ID == \"" + priceSheetId + "\"",1,1,"creator_connection");
-								try
-								{
-									if(creatorSearchRows.containsKey("data"))
-									{
-										creatorSearchRows = creatorSearchRows.get("data");
-									}
-								}
-								catch(unwrapCrmIdRowsErr)
-								{
-								}
-							}
-							if((creatorSearchRows == null || creatorSearchRows.size() <= 0) && creatorSheetId != "")
-							{
-								creatorSearchRows = zoho.creator.getRecords("tvspro","application-by-chris","All_Price_Sheets","ID == " + creatorSheetId,1,1,"creator_connection");
-								try
-								{
-									if(creatorSearchRows.containsKey("data"))
-									{
-										creatorSearchRows = creatorSearchRows.get("data");
-									}
-								}
-								catch(unwrapIdRowsErr)
-								{
-								}
-							}
-							if(creatorSearchRows != null && creatorSearchRows.size() > 0)
-							{
-								searchSheet = creatorSearchRows.get(0);
-								if(searchSheet.get("Line_Item_Lookup") != null)
-								{
-									soldLookups = searchSheet.get("Line_Item_Lookup");
-								}
-								if(creatorSheetId == "")
-								{
-									creatorSheetId = ifnull(searchSheet.get("ID"),"").toString();
-								}
-							}
-						}
-						catch(sheetListErr)
-						{
-						}
-					}
 					if(soldLookups == null)
 					{
 						soldLookups = List();
 					}
 					if(soldLookups.size() <= 0)
 					{
-						if(creatorSheetId != "")
+						if(creatorSheetId != "" || priceSheetId != "")
 						{
 							warnings.add("Creator sold lines were not returned for this price sheet. Task hours were still applied.");
 						}
