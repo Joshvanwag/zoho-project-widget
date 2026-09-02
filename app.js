@@ -8,6 +8,9 @@ const state = {
   quotes: [],
   eligibleQuotes: [],
   selectedQuoteId: "",
+  priceSheets: [],
+  matchedPriceSheet: null,
+  matchedPriceSheetPdfName: "",
   visibleFields: [],
   actualMissingFields: [],
   currentMissingRequiredFields: [],
@@ -47,7 +50,7 @@ function setMessage(type, text) {
   els.message.className = `message ${type}`;
   els.message.textContent = text || "";
 
-  if (!text || type === "info" || type === "warning") {
+  if (!text || type === "info") {
     els.message.classList.add("hidden");
   } else {
     els.message.classList.remove("hidden");
@@ -852,12 +855,14 @@ function renderSalesOrders() {
     const field = { apiName: "selected_so", label: "SO Number", type: "picklist" };
     const control = createSinglePicklistControl(field, state.selectedQuoteId, state.isBusy, options, value => {
       state.selectedQuoteId = value;
-      renderStatus();
+      matchPriceSheetForSelectedQuote();
+      render();
     });
     row.appendChild(control);
   }
 
   els.soSection.appendChild(row);
+  renderDocumentPreview();
 }
 
 function canCreateProject(options = {}) {
@@ -965,7 +970,9 @@ async function loadDeal() {
 
     validateDeal();
     await loadRelatedQuotes();
-    debug({ deal: state.deal, quotes: state.quotes, eligibleQuotes: state.eligibleQuotes, actualMissingFields: state.actualMissingFields, currentMissingFields: state.currentMissingRequiredFields, isInstall: state.isInstall });
+    await loadRelatedPriceSheets();
+    matchPriceSheetForSelectedQuote();
+    debug({ deal: state.deal, quotes: state.quotes, eligibleQuotes: state.eligibleQuotes, priceSheets: state.priceSheets, matchedPriceSheet: state.matchedPriceSheet, actualMissingFields: state.actualMissingFields, currentMissingFields: state.currentMissingRequiredFields, isInstall: state.isInstall });
   } catch (error) {
     setMessage("error", error.message || "Error loading Deal.");
   } finally {
@@ -994,6 +1001,152 @@ async function loadRelatedQuotes() {
   } else {
     state.selectedQuoteId = "";
   }
+}
+
+function quoteNumberTokens(quote) {
+  if (!quote) return [];
+  return [quote.CRM_Quote_Number, quote.Quote_Number]
+    .map(value => normalize(value))
+    .filter((value, index, list) => value && list.indexOf(value) === index);
+}
+
+function priceSheetMatchesQuote(sheet, quote) {
+  if (!sheet || !quote) return false;
+
+  const lookup = sheet[cfg.priceSheetQuoteLookupField];
+  const lookupId = lookup && typeof lookup === "object" ? lookup.id : lookup;
+  if (lookupId && String(lookupId) === String(quote.id)) return true;
+
+  const sheetName = normalize(sheet.Name);
+  const prefix = normalize(cfg.priceSheetNamePrefix || "Install Price Sheet").toLowerCase();
+  if (!sheetName.toLowerCase().includes(prefix.toLowerCase())) return false;
+
+  return quoteNumberTokens(quote).some(token => sheetName.includes(token));
+}
+
+function newerPriceSheet(current, candidate) {
+  if (!current) return candidate;
+  const currentTime = current.Modified_Time || current.Created_Time || "";
+  const candidateTime = candidate.Modified_Time || candidate.Created_Time || "";
+  return candidateTime > currentTime ? candidate : current;
+}
+
+async function loadRelatedPriceSheets() {
+  state.priceSheets = [];
+  state.matchedPriceSheet = null;
+  state.matchedPriceSheetPdfName = "";
+
+  try {
+    const response = await ZOHO.CRM.API.getRelatedRecords({
+      Entity: cfg.moduleApiName,
+      RecordID: state.dealId,
+      RelatedList: cfg.priceSheetRelatedListApiName || "Install_Price_Sheets",
+      page: 1,
+      per_page: 200
+    });
+    state.priceSheets = response?.data || [];
+  } catch (error) {
+    debug({ priceSheetRelatedListError: error });
+    state.priceSheets = [];
+  }
+
+  if (state.priceSheets.length === 0) {
+    try {
+      const searchResponse = await ZOHO.CRM.API.searchRecord({
+        Entity: cfg.priceSheetModuleApiName || "Install_Price_Sheets",
+        Type: "criteria",
+        Query: `(Deal_Name:equals:${state.dealId})`
+      });
+      state.priceSheets = searchResponse?.data || [];
+    } catch (searchError) {
+      debug({ priceSheetSearchError: searchError });
+    }
+  }
+}
+
+async function loadLatestPriceSheetPdfName(sheet) {
+  state.matchedPriceSheetPdfName = "";
+  if (!sheet?.id) return;
+
+  try {
+    const response = await ZOHO.CRM.API.getRelatedRecords({
+      Entity: cfg.priceSheetModuleApiName || "Install_Price_Sheets",
+      RecordID: sheet.id,
+      RelatedList: "Attachments",
+      page: 1,
+      per_page: 200
+    });
+
+    const pdfs = (response?.data || []).filter(attachment => {
+      const fileName = normalize(attachment.File_Name).toLowerCase();
+      return fileName.includes(".pdf");
+    });
+
+    pdfs.sort((a, b) => {
+      const aTime = a.Created_Time || a.Modified_Time || "";
+      const bTime = b.Created_Time || b.Modified_Time || "";
+      return aTime > bTime ? -1 : aTime < bTime ? 1 : 0;
+    });
+
+    state.matchedPriceSheetPdfName = pdfs[0] ? normalize(pdfs[0].File_Name) : "";
+  } catch (error) {
+    debug({ priceSheetAttachmentError: error });
+  }
+}
+
+function matchPriceSheetForSelectedQuote() {
+  const selectedQuote = state.eligibleQuotes.find(quote => quote.id === state.selectedQuoteId);
+  let matched = null;
+
+  if (selectedQuote) {
+    state.priceSheets.forEach(sheet => {
+      if (priceSheetMatchesQuote(sheet, selectedQuote)) {
+        matched = newerPriceSheet(matched, sheet);
+      }
+    });
+  }
+
+  state.matchedPriceSheet = matched;
+  state.matchedPriceSheetPdfName = "";
+  if (matched) loadLatestPriceSheetPdfName(matched).then(() => renderDocumentPreview());
+}
+
+function renderDocumentPreview() {
+  if (!els.soSection || els.soSection.classList.contains("hidden")) return;
+
+  const existing = document.getElementById("documentPreview");
+  if (existing) existing.remove();
+
+  if (!state.selectedQuoteId) return;
+
+  const selectedQuote = state.eligibleQuotes.find(quote => quote.id === state.selectedQuoteId);
+  const preview = document.createElement("div");
+  preview.id = "documentPreview";
+  preview.className = "document-preview";
+
+  const soNumber = normalize(selectedQuote?.[cfg.quoteSoNumberField]);
+  const sqNumber = quoteNumberTokens(selectedQuote)[0] || "";
+
+  const soLine = document.createElement("p");
+  soLine.textContent = soNumber
+    ? `SO PDF: native CRM Sales Order PDF for SO ${soNumber}`
+    : "SO PDF: a native CRM Sales Order PDF will be generated from the selected SO.";
+  preview.appendChild(soLine);
+
+  const sheetLine = document.createElement("p");
+  if (state.matchedPriceSheet) {
+    const pdfNote = state.matchedPriceSheetPdfName
+      ? `Latest PDF: ${state.matchedPriceSheetPdfName}`
+      : "No PDF attachment found yet; project creation will still continue.";
+    sheetLine.textContent = `Price sheet: ${normalize(state.matchedPriceSheet.Name) || "matched record"} (${pdfNote})`;
+  } else if (sqNumber) {
+    sheetLine.textContent = `Price sheet: none matched for SQ ${sqNumber}. Project creation will still continue.`;
+  } else {
+    sheetLine.textContent = "Price sheet: none matched for the selected Sales Quote. Project creation will still continue.";
+  }
+  preview.appendChild(sheetLine);
+
+  els.soSection.appendChild(preview);
 }
 
 function buildFieldValuesPayload() {
@@ -1094,6 +1247,8 @@ async function createProject() {
     const selectedQuote = state.eligibleQuotes.find(q => q.id === state.selectedQuoteId);
     const salesOrderNumber = normalize(selectedQuote?.[cfg.quoteSoNumberField]);
     const fieldValues = buildFieldValuesPayload();
+    const crmQuoteNumber = normalize(selectedQuote?.CRM_Quote_Number || selectedQuote?.Quote_Number);
+    const quoteNumber = normalize(selectedQuote?.Quote_Number);
 
     setMessage("", "");
 
@@ -1102,6 +1257,9 @@ async function createProject() {
         deal_id: state.dealId,
         quote_id: state.selectedQuoteId,
         sales_order_number: salesOrderNumber,
+        crm_quote_number: crmQuoteNumber,
+        quote_number: quoteNumber,
+        price_sheet_id: state.matchedPriceSheet?.id || "",
         field_values: fieldValues
       })
     });
@@ -1115,14 +1273,20 @@ async function createProject() {
     }
 
     const projectName = details.project_name ? ` ${details.project_name}` : "";
-    setMessage("success", details.message || `Project created successfully.${projectName}`);
+    const warnings = Array.isArray(details.warnings)
+      ? details.warnings.filter(Boolean)
+      : (typeof details.warnings === "string" && details.warnings ? [details.warnings] : []);
+    const successText = details.message || `Project created successfully.${projectName}`;
+    setMessage(warnings.length > 0 ? "warning" : "success", successText);
     createdProject = true;
     state.projectCreated = true;
     els.createButton.textContent = "Project Created";
     els.createButton.disabled = true;
     els.refreshButton.disabled = true;
 
-    closeWidgetAfterSuccess();
+    if (warnings.length === 0) {
+      closeWidgetAfterSuccess();
+    }
   } catch (error) {
     setMessage("error", error.message || "Error creating Project.");
     els.createButton.disabled = false;

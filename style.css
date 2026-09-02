@@ -577,6 +577,16 @@ input[type="date"]:disabled::-webkit-calendar-picker-indicator {
   padding-top: 0;
 }
 
+.document-preview {
+  margin-top: 10px;
+  color: #6b7280;
+  font-size: 13px;
+}
+
+.document-preview p {
+  margin: 0 0 4px;
+}
+
 
 /* --- Expandable existing Deal information --- */
 .existing-deal-info {

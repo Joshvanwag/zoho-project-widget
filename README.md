@@ -15,3 +15,7 @@ Changes:
 
 - Programming Required is automatically checked when Programming Hours is greater than 0.
 - Programming Information is required only when Programming Hours is greater than 0.
+
+- After project creation, `create_project` uploads the selected Sales Order PDF and the matching Install Price Sheet PDF to Zoho Projects documents. PDF failures never block project creation.
+- The matching price sheet is the `Install_Price_Sheets` related-list record named like `Install Price Sheet - SQ #`, using the selected quote's SQ number. The most recent PDF attachment on that record is uploaded.
+- Price sheet hours are written 1:1 onto sister tasks (`Cabling - T1` / `Cabling - T2`, same for Video, Audio, Component Management) and all programming hours go on the **Programming** parent. Sold labor lines are written to the Install Lines module at create time only.

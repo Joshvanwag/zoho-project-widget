@@ -10,6 +10,12 @@ window.PROJECT_WIDGET_CONFIG = {
   quoteSoNumberField: "Sales_Order_Number",
   quoteDisplayFields: ["Sales_Order_Number", "CRM_Quote_Number", "Quote_Number", "Subject", "Grand_Total", "Quote_Stage"],
 
+  priceSheetModuleApiName: "Install_Price_Sheets",
+  priceSheetRelatedListApiName: "Install_Price_Sheets",
+  priceSheetQuoteLookupField: "Sales_Quote_Lookup",
+  priceSheetNamePrefix: "Install Price Sheet",
+  salesOrderModuleApiName: "Sales_Orders",
+
   createProjectFunctionName: "create_project",
 
   // source: "deal" values may be saved back to CRM when entered in the widget.

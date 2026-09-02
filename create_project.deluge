@@ -94,6 +94,13 @@ try
 		return result.toString();
 	}
 
+	crmQuoteNumber = ifnull(quote.get("CRM_Quote_Number"),"");
+	quoteNumber = ifnull(quote.get("Quote_Number"),"");
+	if(crmQuoteNumber == "")
+	{
+		crmQuoteNumber = quoteNumber;
+	}
+
 	quoteDeal = quote.get("Deal_Name");
 
 	if(quoteDeal != null)
@@ -764,8 +771,783 @@ try
 		return result.toString();
 	}
 
-	// Template task copying is asynchronous, so this verification is informational only.
+	warnings = List();
+	pdfUploads = List();
+	priceSheetId = "";
+	priceSheetName = "";
+	priceSheet = Map();
+	priceSheetIdArg = ifnull(args.get("price_sheet_id"),"");
+	tasksUpdated = 0;
+	lineItemsCreated = 0;
 	taskCount = 0;
+	documentsUrl = "https://projectsapi.zoho.com/restapi/portal/" + portalId + "/projects/" + projectId + "/documents/";
+
+	// PDF uploads and task-hour updates must never fail project creation.
+	try
+	{
+		if(priceSheetIdArg != "")
+		{
+			try
+			{
+				argSheet = zoho.crm.getRecordById("Install_Price_Sheets",priceSheetIdArg);
+				if(argSheet != null && argSheet.get("id") != null)
+				{
+					priceSheet = argSheet;
+				}
+			}
+			catch(argSheetErr)
+			{
+				priceSheet = Map();
+			}
+		}
+
+		sqTokens = List();
+		if(crmQuoteNumber != "")
+		{
+			sqTokens.add(crmQuoteNumber.toString());
+		}
+		if(quoteNumber != "" && quoteNumber.toString() != crmQuoteNumber.toString())
+		{
+			sqTokens.add(quoteNumber.toString());
+		}
+
+		// Prefer the price sheet linked to this Sales Quote. Fall back to the Deal related list + SQ in the name.
+		if(priceSheet.get("id") == null)
+		{
+			try
+			{
+				lookupSheets = zoho.crm.searchRecords("Install_Price_Sheets","(Sales_Quote_Lookup:equals:" + quoteId + ")");
+				if(lookupSheets != null && lookupSheets.size() > 0 && lookupSheets.get(0) != null && lookupSheets.get(0).get("id") != null)
+				{
+					bestSheet = lookupSheets.get(0);
+					bestTime = ifnull(bestSheet.get("Modified_Time"),ifnull(bestSheet.get("Created_Time"),""));
+					for each  sheet in lookupSheets
+					{
+						sheetTime = ifnull(sheet.get("Modified_Time"),ifnull(sheet.get("Created_Time"),""));
+						if(sheetTime > bestTime)
+						{
+							bestSheet = sheet;
+							bestTime = sheetTime;
+						}
+					}
+					priceSheet = bestSheet;
+				}
+			}
+			catch(lookupErr)
+			{
+			}
+		}
+
+		if((priceSheet == null || priceSheet.get("id") == null))
+		{
+			relatedSheets = List();
+			try
+			{
+				relatedSheets = zoho.crm.getRelatedRecords("Install_Price_Sheets","Deals",dealId,1,200);
+			}
+			catch(relatedErr)
+			{
+				relatedSheets = List();
+			}
+
+			if(relatedSheets != null && relatedSheets.size() > 0 && relatedSheets.get(0) != null && relatedSheets.get(0).get("id") != null)
+			{
+				bestSheet = Map();
+				bestTime = "";
+				for each  sheet in relatedSheets
+				{
+					sheetName = ifnull(sheet.get("Name"),"").toString();
+					nameLower = sheetName.toLowerCase();
+					nameLooksLikePriceSheet = nameLower.contains("install price sheet");
+					matchesSq = false;
+					for each  token in sqTokens
+					{
+						if(token != "" && sheetName.contains(token))
+						{
+							matchesSq = true;
+						}
+					}
+					if(nameLooksLikePriceSheet && (matchesSq || sqTokens.size() == 0))
+					{
+						sheetTime = ifnull(sheet.get("Modified_Time"),ifnull(sheet.get("Created_Time"),""));
+						if(bestSheet.get("id") == null || sheetTime > bestTime)
+						{
+							bestSheet = sheet;
+							bestTime = sheetTime;
+						}
+					}
+				}
+				if(bestSheet.get("id") != null)
+				{
+					priceSheet = bestSheet;
+				}
+			}
+		}
+
+		if((priceSheet == null || priceSheet.get("id") == null) && sqTokens.size() > 0)
+		{
+			for each  token in sqTokens
+			{
+				nameCandidates = List();
+				nameCandidates.add("Install Price Sheet - SQ " + token);
+				nameCandidates.add("Install Price Sheet - SQ #" + token);
+				nameCandidates.add("Install Price Sheet - " + token);
+				for each  candidateName in nameCandidates
+				{
+					try
+					{
+						namedSheets = zoho.crm.searchRecords("Install_Price_Sheets","(Name:equals:" + candidateName + ")");
+						if(namedSheets != null && namedSheets.size() > 0 && namedSheets.get(0) != null && namedSheets.get(0).get("id") != null)
+						{
+							priceSheet = namedSheets.get(0);
+							break;
+						}
+					}
+					catch(nameSearchErr)
+					{
+					}
+				}
+				if(priceSheet != null && priceSheet.get("id") != null)
+				{
+					break;
+				}
+			}
+		}
+
+		if(priceSheet != null && priceSheet.get("id") != null)
+		{
+			priceSheetId = priceSheet.get("id").toString();
+			priceSheetName = ifnull(priceSheet.get("Name"),"");
+			try
+			{
+				fullSheet = zoho.crm.getRecordById("Install_Price_Sheets",priceSheetId);
+				if(fullSheet != null && fullSheet.get("id") != null)
+				{
+					priceSheet = fullSheet;
+					priceSheetName = ifnull(priceSheet.get("Name"),priceSheetName);
+				}
+			}
+			catch(fullSheetErr)
+			{
+			}
+
+			try
+			{
+				attachments = zoho.crm.getRelatedRecords("Attachments","Install_Price_Sheets",priceSheetId,1,200);
+				latestPdf = Map();
+				latestPdfTime = "";
+				if(attachments != null && attachments.size() > 0 && attachments.get(0) != null && attachments.get(0).get("id") != null)
+				{
+					for each  attachment in attachments
+					{
+						fileName = ifnull(attachment.get("File_Name"),"").toString().toLowerCase();
+						if(fileName.contains(".pdf"))
+						{
+							createdTime = ifnull(attachment.get("Created_Time"),ifnull(attachment.get("Modified_Time"),""));
+							if(latestPdf.get("id") == null || createdTime > latestPdfTime)
+							{
+								latestPdf = attachment;
+								latestPdfTime = createdTime;
+							}
+						}
+					}
+				}
+
+				if(latestPdf.get("id") != null)
+				{
+					pdfFile = invokeurl
+					[
+						url :"https://www.zohoapis.com/crm/v2/Install_Price_Sheets/" + priceSheetId + "/Attachments/" + latestPdf.get("id")
+						type :GET
+						connection:"zcrm"
+					];
+					uploadName = priceSheetName;
+					if(uploadName == "")
+					{
+						uploadName = "Install Price Sheet - SQ " + crmQuoteNumber;
+					}
+					pdfFile.setFileName(uploadName + ".pdf");
+					pdfFile.setParamName("uploaddoc");
+					uploadResponse = invokeurl
+					[
+						url :documentsUrl
+						type :POST
+						files:pdfFile
+						connection:"projects"
+					];
+					pdfUploads.add("price_sheet");
+				}
+				else
+				{
+					warnings.add("No PDF attachment was found on price sheet " + priceSheetName + ".");
+				}
+			}
+			catch(priceSheetPdfErr)
+			{
+				warnings.add("Price sheet PDF upload failed.");
+			}
+		}
+		else
+		{
+			if(crmQuoteNumber != "")
+			{
+				warnings.add("No Install Price Sheet matching SQ " + crmQuoteNumber + " was found.");
+			}
+			else
+			{
+				warnings.add("No Install Price Sheet matching the selected Sales Quote was found.");
+			}
+		}
+	}
+	catch(priceSheetErr)
+	{
+		warnings.add("Price sheet lookup failed.");
+	}
+
+	try
+	{
+		salesOrderId = "";
+		linkToSo = quote.get("Link_to_SO");
+		try
+		{
+			if(linkToSo != null && linkToSo.get("id") != null)
+			{
+				salesOrderId = linkToSo.get("id").toString();
+			}
+		}
+		catch(linkToSoErr)
+		{
+			salesOrderId = "";
+		}
+
+		if(salesOrderId == "")
+		{
+			soSearchFields = List();
+			soSearchFields.add("Subject");
+			soSearchFields.add("SO_Number");
+			soSearchFields.add("Sales_Order_Number");
+			for each  soField in soSearchFields
+			{
+				try
+				{
+					soMatches = zoho.crm.searchRecords("Sales_Orders","(" + soField + ":equals:" + selectedSONumber + ")");
+					if(soMatches != null && soMatches.size() > 0 && soMatches.get(0) != null && soMatches.get(0).get("id") != null)
+					{
+						salesOrderId = soMatches.get(0).get("id").toString();
+						break;
+					}
+				}
+				catch(soSearchErr)
+				{
+				}
+			}
+		}
+
+		if(salesOrderId != "")
+		{
+			soPdf = null;
+			try
+			{
+				templateResponse = invokeurl
+				[
+					url :"https://www.zohoapis.com/crm/v2/settings/inventory_templates?module=Sales_Orders"
+					type :GET
+					connection:"zcrm"
+				];
+				soTemplateId = "";
+				if(templateResponse != null && templateResponse.get("inventory_templates") != null)
+				{
+					soTemplates = templateResponse.get("inventory_templates");
+					if(soTemplates.size() > 0)
+					{
+						soTemplateId = ifnull(soTemplates.get(0).get("id"),"");
+						for each  soTemplate in soTemplates
+						{
+							templateName = ifnull(soTemplate.get("name"),"").toLowerCase();
+							if(templateName.contains("standard") || templateName.contains("sales order"))
+							{
+								soTemplateId = ifnull(soTemplate.get("id"),soTemplateId);
+								break;
+							}
+						}
+					}
+				}
+				if(soTemplateId != "")
+				{
+					soPdf = invokeurl
+					[
+						url :"https://www.zohoapis.com/crm/v2/settings/inventory_templates/" + soTemplateId + "/actions/print_preview?record_id=" + salesOrderId + "&print_type=pdf"
+						type :GET
+						connection:"zcrm"
+					];
+				}
+			}
+			catch(templatePdfErr)
+			{
+				soPdf = null;
+			}
+
+			if(soPdf == null)
+			{
+				try
+				{
+					soPdf = invokeurl
+					[
+						url :"https://www.zohoapis.com/crm/v2/Sales_Orders/" + salesOrderId + "/pdf"
+						type :GET
+						connection:"zcrm"
+					];
+				}
+				catch(soPdfErr)
+				{
+					soPdf = null;
+				}
+			}
+
+			if(soPdf != null)
+			{
+				soPdf.setFileName("SO " + selectedSONumber + ".pdf");
+				soPdf.setParamName("uploaddoc");
+				soUploadResponse = invokeurl
+				[
+					url :documentsUrl
+					type :POST
+					files:soPdf
+					connection:"projects"
+				];
+				pdfUploads.add("sales_order");
+			}
+			else
+			{
+				warnings.add("The Sales Order PDF could not be generated for SO " + selectedSONumber + ".");
+			}
+		}
+		else
+		{
+			warnings.add("No CRM Sales Order was found for SO " + selectedSONumber + ".");
+		}
+	}
+	catch(soErr)
+	{
+		warnings.add("Sales Order PDF upload failed.");
+	}
+
+	try
+	{
+		if(priceSheet != null && priceSheet.get("id") != null)
+		{
+			hourFields = List();
+			hourFields.add("Job_Review_Training_Hours");
+			hourFields.add("Drive_Time_Hours");
+			hourFields.add("Project_Management_Hours");
+			hourFields.add("Warranty_Hours");
+			hourFields.add("Tier_1_Cabling_Hours");
+			hourFields.add("Tier_2_Cabling_Hours");
+			hourFields.add("Tier_1_Video_Hours");
+			hourFields.add("Tier_2_Video_Hours");
+			hourFields.add("Tier_1_Audio_Hours");
+			hourFields.add("Tier_2_Audio_Hours");
+			hourFields.add("Tier_1_Component_Hours");
+			hourFields.add("Tier_2_Component_Hours");
+			hourFields.add("Programming_Hours");
+			hourFields.add("T2_Programming_Hours");
+			hourFields.add("Tier_3_Programming_Hours");
+
+			psHours = Map();
+			for each  hourField in hourFields
+			{
+				hourValue = 0.0;
+				try
+				{
+					hourValue = ifnull(priceSheet.get(hourField),0).toDecimal();
+				}
+				catch(hourErr)
+				{
+					hourValue = 0.0;
+				}
+				if(hourValue < 0)
+				{
+					hourValue = 0.0;
+				}
+				psHours.put(hourField,hourValue);
+			}
+
+			t1Programming = psHours.get("Programming_Hours");
+			t2Programming = psHours.get("T2_Programming_Hours");
+			t3Programming = psHours.get("Tier_3_Programming_Hours");
+			programmingParentHours = t1Programming + t2Programming + t3Programming;
+
+			taskHours = Map();
+			taskHours.put("Installation||Job Review",psHours.get("Job_Review_Training_Hours"));
+			taskHours.put("Installation||Drive Time",psHours.get("Drive_Time_Hours"));
+			taskHours.put("Installation||Cabling - T1",psHours.get("Tier_1_Cabling_Hours"));
+			taskHours.put("Installation||Cabling - T2",psHours.get("Tier_2_Cabling_Hours"));
+			taskHours.put("Installation||Video - T1",psHours.get("Tier_1_Video_Hours"));
+			taskHours.put("Installation||Video - T2",psHours.get("Tier_2_Video_Hours"));
+			taskHours.put("Installation||Audio - T1",psHours.get("Tier_1_Audio_Hours"));
+			taskHours.put("Installation||Audio - T2",psHours.get("Tier_2_Audio_Hours"));
+			taskHours.put("Installation||Component Management - T1",psHours.get("Tier_1_Component_Hours"));
+			taskHours.put("Installation||Component Management - T2",psHours.get("Tier_2_Component_Hours"));
+			taskHours.put("Administrative||Scheduling",psHours.get("Project_Management_Hours"));
+			taskHours.put("Assembly||Programming",programmingParentHours);
+
+			copiedTasks = List();
+			pollAttempts = List();
+			pollAttempts.add(1);
+			pollAttempts.add(2);
+			pollAttempts.add(3);
+			pollAttempts.add(4);
+			pollAttempts.add(5);
+			pollAttempts.add(6);
+			pollAttempts.add(7);
+			pollAttempts.add(8);
+			pollAttempts.add(9);
+			pollAttempts.add(10);
+			pollAttempts.add(11);
+			pollAttempts.add(12);
+			for each  pollAttempt in pollAttempts
+			{
+				try
+				{
+					taskResponse = invokeurl
+					[
+						url :"https://projectsapi.zoho.com/api/v3/portal/" + portalId + "/projects/" + projectId + "/tasks?per_page=200"
+						type :GET
+						connection:"projects"
+					];
+					if(taskResponse != null && taskResponse.get("tasks") != null)
+					{
+						copiedTasks = taskResponse.get("tasks");
+						if(copiedTasks.size() >= 10)
+						{
+							break;
+						}
+					}
+				}
+				catch(taskPollErr)
+				{
+				}
+			}
+
+			if(copiedTasks.size() > 0)
+			{
+				for each  copiedTask in copiedTasks
+				{
+					copiedName = ifnull(copiedTask.get("name"),"").toString().replaceAll("&amp;","&").trim();
+					copiedListName = "";
+					copiedList = copiedTask.get("tasklist");
+					if(copiedList != null)
+					{
+						copiedListName = ifnull(copiedList.get("name"),"").toString();
+					}
+					hourKey = copiedListName + "||" + copiedName;
+					mappedHours = taskHours.get(hourKey);
+					if(mappedHours == null)
+					{
+						mappedHours = 0.0;
+					}
+					if(mappedHours > 0 && copiedTask.get("id") != null)
+					{
+						durationMap = Map();
+						durationMap.put("type","hours");
+						durationMap.put("value",mappedHours.toString());
+						taskPayload = Map();
+						taskPayload.put("duration",durationMap);
+						budgetMap = Map();
+						budgetMap.put("hourly_budget",mappedHours.toString());
+						taskPayload.put("budget_info",budgetMap);
+						taskPayload.put("hours_logged_at_last_progress",0);
+						try
+						{
+							taskUpdateResponse = invokeurl
+							[
+								url :"https://projectsapi.zoho.com/api/v3/portal/" + portalId + "/projects/" + projectId + "/tasks/" + copiedTask.get("id")
+								type :PATCH
+								body:taskPayload.toString()
+								headers:headersMap
+								connection:"projects"
+							];
+							if(taskUpdateResponse != null && taskUpdateResponse.containsKey("error"))
+							{
+								durationOnly = Map();
+								durationOnly.put("duration",durationMap);
+								taskUpdateResponse = invokeurl
+								[
+									url :"https://projectsapi.zoho.com/api/v3/portal/" + portalId + "/projects/" + projectId + "/tasks/" + copiedTask.get("id")
+									type :PATCH
+									body:durationOnly.toString()
+									headers:headersMap
+									connection:"projects"
+								];
+							}
+							if(taskUpdateResponse == null || taskUpdateResponse.containsKey("error"))
+							{
+								warnings.add("Could not apply " + mappedHours.toString() + " hours to task " + copiedName + ".");
+							}
+							else
+							{
+								tasksUpdated = tasksUpdated + 1;
+							}
+						}
+						catch(taskUpdateErr)
+						{
+							warnings.add("Could not apply hours to task " + copiedName + ".");
+						}
+					}
+				}
+
+				try
+				{
+					creatorSheetId = ifnull(priceSheet.get("Creator_Record_ID"),"").toString();
+					if(creatorSheetId == "")
+					{
+						creatorSearch = zoho.creator.getRecords("tvspro","application-by-chris","All_Price_Sheets","CRM_Install_Price_Sheet_ID == \"" + priceSheetId + "\"",1,1,"creator_connection");
+						if(creatorSearch != null && creatorSearch.size() > 0)
+						{
+							creatorSheetId = ifnull(creatorSearch.get(0).get("ID"),"").toString();
+						}
+					}
+					soldLookups = List();
+					if(creatorSheetId != "")
+					{
+						try
+						{
+							creatorSheet = zoho.creator.getRecordById("tvspro","application-by-chris","All_Price_Sheets",creatorSheetId,"creator_connection");
+							sheetData = creatorSheet;
+							if(creatorSheet != null && creatorSheet.get("data") != null)
+							{
+								sheetData = creatorSheet.get("data");
+							}
+							if(sheetData != null && sheetData.get("Line_Item_Lookup") != null)
+							{
+								soldLookups = sheetData.get("Line_Item_Lookup");
+							}
+						}
+						catch(sheetByIdErr)
+						{
+						}
+					}
+					if(soldLookups == null)
+					{
+						soldLookups = List();
+					}
+					if(soldLookups.size() <= 0)
+					{
+						if(creatorSheetId != "")
+						{
+							warnings.add("Creator sold lines were not returned. Add the Line Item Lookup column to the All Price Sheets report in Creator, then create a new project. Task hours were still applied.");
+						}
+					}
+					else
+					{
+						taskByRoute = Map();
+						for each  copiedTask in copiedTasks
+						{
+							routeName = ifnull(copiedTask.get("name"),"").toString().replaceAll("&amp;","&").trim();
+							routeList = "";
+							copiedList = copiedTask.get("tasklist");
+							if(copiedList != null)
+							{
+								routeList = ifnull(copiedList.get("name"),"").toString();
+							}
+							taskByRoute.put(routeList + "||" + routeName,copiedTask);
+							taskByRoute.put(routeName,copiedTask);
+						}
+						catalogById = Map();
+						try
+						{
+							catalogRows = zoho.creator.getRecords("tvspro","application-by-chris","All_Line_Items","Hours >= 0",1,200,"creator_connection");
+							if(catalogRows != null)
+							{
+								for each  catalogRow in catalogRows
+								{
+									catalogById.put(ifnull(catalogRow.get("ID"),"").toString(),catalogRow);
+								}
+							}
+						}
+						catch(catalogPageErr)
+						{
+						}
+						soldBuckets = Map();
+						bucketKeys = List();
+						for each  soldLookup in soldLookups
+						{
+							catalogRef = soldLookup.get("Install_Line_Items_Hours_Cost");
+							if(catalogRef != null)
+							{
+								lineName = ifnull(catalogRef.get("Install_Line_Name"),"").toString();
+								catalogId = ifnull(catalogRef.get("ID"),"").toString();
+								hoursEach = 0.0;
+								try
+								{
+									hoursEach = ifnull(catalogRef.get("Hours"),0).toDecimal();
+								}
+								catch(hoursEachErr)
+								{
+									hoursEach = 0.0;
+								}
+								qtySold = 0.0;
+								try
+								{
+									qtySold = ifnull(soldLookup.get("Quantity"),0).toDecimal();
+								}
+								catch(qtyErr)
+								{
+									qtySold = 0.0;
+								}
+								if(lineName != "" && hoursEach > 0 && qtySold > 0)
+								{
+									category = "";
+									tier = "";
+									catalogRow = catalogById.get(catalogId);
+									if(catalogRow == null && catalogId != "")
+									{
+										try
+										{
+											catalogLookup = zoho.creator.getRecords("tvspro","application-by-chris","All_Line_Items","ID == " + catalogId,1,1,"creator_connection");
+											if(catalogLookup != null && catalogLookup.size() > 0)
+											{
+												catalogRow = catalogLookup.get(0);
+												catalogById.put(catalogId,catalogRow);
+											}
+										}
+										catch(catalogErr)
+										{
+										}
+									}
+									if(catalogRow != null)
+									{
+										category = ifnull(catalogRow.get("Task_Category"),"").toString();
+										tier = ifnull(catalogRow.get("Tier"),"").toString();
+									}
+									targetTask = null;
+									if(category == "Programming")
+									{
+										targetTask = taskByRoute.get("Assembly||Programming");
+										if(targetTask == null)
+										{
+											targetTask = taskByRoute.get("Programming");
+										}
+									}
+									else
+									{
+										categoryName = category;
+										if(category == "Component")
+										{
+											categoryName = "Component Management";
+										}
+										tierSuffix = "";
+										if(tier == "2" || tier == "3")
+										{
+											tierSuffix = " - T2";
+										}
+										else if(tier == "1")
+										{
+											tierSuffix = " - T1";
+										}
+										if(categoryName != "" && tierSuffix != "")
+										{
+											targetTask = taskByRoute.get("Installation||" + categoryName + tierSuffix);
+											if(targetTask == null)
+											{
+												targetTask = taskByRoute.get(categoryName + tierSuffix);
+											}
+										}
+									}
+									if(targetTask != null && targetTask.get("id") != null)
+									{
+										bucketKey = targetTask.get("id").toString() + "||" + lineName;
+										bucket = soldBuckets.get(bucketKey);
+										if(bucket == null)
+										{
+											bucket = Map();
+											bucket.put("name",lineName);
+											bucket.put("task_id",targetTask.get("id").toString());
+											bucket.put("catalog_id",catalogId);
+											bucket.put("hours_each",hoursEach);
+											bucket.put("sold_qty",qtySold);
+											bucketKeys.add(bucketKey);
+										}
+										else
+										{
+											bucket.put("sold_qty",bucket.get("sold_qty") + qtySold);
+										}
+										soldBuckets.put(bucketKey,bucket);
+									}
+								}
+							}
+						}
+						for each  bucketKey in bucketKeys
+						{
+							bucket = soldBuckets.get(bucketKey);
+							allocatedHours = bucket.get("hours_each") * bucket.get("sold_qty");
+							linePayload = Map();
+							linePayload.put("name",bucket.get("name"));
+							projectRef = Map();
+							projectRef.put("id",projectId);
+							linePayload.put("project",projectRef);
+							layoutRef = Map();
+							layoutRef.put("id","1684307000018866202");
+							linePayload.put("layout",layoutRef);
+							linePayload.put("qty_done",0);
+							linePayload.put("sold_qty",bucket.get("sold_qty"));
+							linePayload.put("hours_each",bucket.get("hours_each"));
+							linePayload.put("allocated_hours",allocatedHours);
+							linePayload.put("related_task_id",bucket.get("task_id"));
+							linePayload.put("catalog_line_id",bucket.get("catalog_id"));
+							try
+							{
+								lineCreate = invokeurl
+								[
+									url :"https://projectsapi.zoho.com/api/v3/portal/" + portalId + "/module/install_line/entities"
+									type :POST
+									body:linePayload.toString()
+									headers:headersMap
+									connection:"projects"
+								];
+								if(lineCreate != null && lineCreate.containsKey("error"))
+								{
+									lineCreate = invokeurl
+									[
+										url :"https://projectsapi.zoho.com/api/v3/portal/" + portalId + "/projects/" + projectId + "/module/install_line/entities"
+										type :POST
+										body:linePayload.toString()
+										headers:headersMap
+										connection:"projects"
+									];
+								}
+								if(lineCreate != null && !lineCreate.containsKey("error"))
+								{
+									lineItemsCreated = lineItemsCreated + 1;
+								}
+							}
+							catch(lineCreateErr)
+							{
+							}
+						}
+						if(bucketKeys.size() > 0 && lineItemsCreated <= 0)
+						{
+							warnings.add("Sold install lines were found but could not be written to the Install Lines module.");
+						}
+					}
+				}
+				catch(soldLinesErr)
+				{
+					warnings.add("Sold install lines could not be written to the Install Lines module.");
+				}
+			}
+			else
+			{
+				warnings.add("Template tasks were not ready yet, so price sheet hours were not applied.");
+			}
+		}
+	}
+	catch(taskHoursErr)
+	{
+		warnings.add("Price sheet hours could not be applied to project tasks.");
+	}
+
+	// Template task copying is asynchronous, so this verification is informational only.
 	try
 	{
 		verifyResponse = invokeurl
@@ -789,16 +1571,37 @@ try
 		// Do not fail project creation because verification or template copying is delayed.
 	}
 
+	successMessage = "Private project created from template and linked successfully.";
+	if(pdfUploads.size() > 0)
+	{
+		successMessage = successMessage + " Uploaded " + pdfUploads.size().toString() + " PDF(s) to project documents.";
+	}
+	if(tasksUpdated > 0)
+	{
+		successMessage = successMessage + " Applied price sheet hours to " + tasksUpdated.toString() + " task(s).";
+	}
+	if(lineItemsCreated > 0)
+	{
+		successMessage = successMessage + " Created " + lineItemsCreated.toString() + " install line(s).";
+	}
+	if(warnings.size() > 0)
+	{
+		successMessage = successMessage + " Warnings: " + warnings.toString();
+	}
+
 	result = Map();
 	result.put("success",true);
-	result.put(
-		"message",
-		"Private project created from template and linked successfully."
-	);
+	result.put("message",successMessage);
 	result.put("project_id",projectId);
 	result.put("project_key",projectKey);
 	result.put("project_name",projectName);
 	result.put("task_count_at_verification",taskCount);
+	result.put("tasks_updated",tasksUpdated);
+	result.put("line_items_created",lineItemsCreated);
+	result.put("pdf_uploads",pdfUploads);
+	result.put("warnings",warnings);
+	result.put("price_sheet_id",priceSheetId);
+	result.put("price_sheet_name",priceSheetName);
 
 	return result.toString();
 }

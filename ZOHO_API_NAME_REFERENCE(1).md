@@ -359,6 +359,9 @@ The following names were provided in Creator workflow discussions. Some are form
 | Deal ID | `deal_id` |
 | Quote ID | `quote_id` |
 | Sales Order Number | `sales_order_number` |
+| CRM Quote Number | `crm_quote_number` |
+| Quote Number | `quote_number` |
+| Matched price sheet ID | `price_sheet_id` |
 | Field values wrapper | `field_values` |
 
 ---
@@ -434,6 +437,11 @@ These are JavaScript configuration properties, not Zoho field API names, but are
 | Quote module | `quoteModuleApiName` |
 | SO number field | `quoteSoNumberField` |
 | Quote display fields | `quoteDisplayFields` |
+| Install Price Sheets module | `priceSheetModuleApiName` |
+| Install Price Sheets related list on Deals | `priceSheetRelatedListApiName` |
+| Price sheet quote lookup field | `priceSheetQuoteLookupField` |
+| Price sheet name prefix | `priceSheetNamePrefix` |
+| Sales Orders module | `salesOrderModuleApiName` |
 | Function name | `createProjectFunctionName` |
 | Field API name | `apiName` |
 | Field source | `source` |
@@ -499,6 +507,10 @@ Project-only widget mappings:
 - `Signal Flow Diagrams` must always be included in the Projects `cad` multipicklist.
 - Projects are private: `is_public_project = false`.
 - Current project template: `1684307000012655127`.
+- After a project is created and linked, `create_project` uploads PDFs, applies price sheet hours, and writes sold install lines. Those steps are best-effort: failures add `warnings` and do not roll back the project.
+- The selected widget SO identifies the Sales Quote (SQ), the Sales Order PDF, and the Install Price Sheet named like `Install Price Sheet - SQ #`.
+- The most recent PDF attachment on the matched price sheet is uploaded to Zoho Projects documents.
+- The Sales Order PDF is generated from the native CRM inventory template for `Sales_Orders`.
 
 ---
 
@@ -687,4 +699,81 @@ This section incorporates the supplied **Zoho CRM API Names — Sales Quotes and
 | Line-item total cost | `Line_Item_Total_Cost` |
 | Created by | `Created_By` |
 | Subform row ID | `id` |
+
+---
+
+## 20. Price sheet PDFs, Sales Order PDFs, and task hour mapping
+
+These names are used by `create_project` after the project exists.
+
+### 20.1 Related lists and document sources
+
+| Purpose | API name / endpoint |
+|---|---|
+| Install Price Sheets related list on Deals | `Install_Price_Sheets` |
+| Price sheet quote lookup | `Sales_Quote_Lookup` |
+| Price sheet record name pattern | `Install Price Sheet - SQ {CRM_Quote_Number}` |
+| Price sheet attachments related list | `Attachments` |
+| Sales Orders module | `Sales_Orders` |
+| Quote to Sales Order lookup | `Link_to_SO` |
+| Sales Order search fields | `Subject`, `SO_Number`, `Sales_Order_Number` |
+| CRM inventory PDF | `/crm/v2/settings/inventory_templates/{id}/actions/print_preview?record_id={soId}&print_type=pdf` |
+| Projects documents upload | `POST /restapi/portal/{portalId}/projects/{projectId}/documents/` |
+
+### 20.2 Template task hour mapping
+
+Hours are applied as task `duration` (hours) and `budget_info.hourly_budget` on the Conference and Collaboration template tasks. Matching is `task list name` + `task name`. T1 and T2 are **not** added together. Programming subtasks get no budgeted hours; time logged there rolls up to the Programming parent.
+
+| Price sheet field(s) | Template task list | Template task |
+|---|---|---|
+| `Job_Review_Training_Hours` | Installation | Job Review |
+| `Drive_Time_Hours` | Installation | Drive Time |
+| `Tier_1_Cabling_Hours` | Installation | Cabling - T1 |
+| `Tier_2_Cabling_Hours` | Installation | Cabling - T2 |
+| `Tier_1_Video_Hours` | Installation | Video - T1 |
+| `Tier_2_Video_Hours` | Installation | Video - T2 |
+| `Tier_1_Audio_Hours` | Installation | Audio - T1 |
+| `Tier_2_Audio_Hours` | Installation | Audio - T2 |
+| `Tier_1_Component_Hours` | Installation | Component Management - T1 |
+| `Tier_2_Component_Hours` | Installation | Component Management - T2 |
+| `Project_Management_Hours` | Administrative | Scheduling |
+| `Programming_Hours` + `T2_Programming_Hours` + `Tier_3_Programming_Hours` | Assembly | Programming |
+
+`hours_logged_at_last_progress` is set to `0` on those hour-stamped tasks.
+
+### 20.3 Install Lines (sold labor)
+
+Module `install_line` (`1684307000018866196`). Written at project create only; no backfill.
+
+| Field | Purpose |
+|---|---|
+| `name` | Catalog line name |
+| `qty_done` | Tech progress (type 3 of 10) |
+| `sold_qty` | Quantity sold on the Creator price sheet |
+| `hours_each` | Catalog hours per unit |
+| `allocated_hours` | `hours_each * sold_qty` |
+| `related_task_id` | Copied sister task or Programming parent |
+| `catalog_line_id` | Creator `Install_Line_Items` ID |
+
+Creator source: workspace `tvspro`, app `application-by-chris`. Join CRM `Install_Price_Sheets.Creator_Record_ID` or Creator `CRM_Install_Price_Sheet_ID`. Sold rows come from the Price Sheet `Line_Item_Lookup` subform. The `All_Line_Item_Lookups` report has no parent Price Sheet field, so `All_Price_Sheets` must include the Line Item Lookup column or `getRecordById` returns no sold lines.
+
+Mapping: catalog `Task_Category` + `Tier` → sister task. `Component` → Component Management. All Programming-category lines → Programming parent. Deduplicate by line name + task and sum qty. Skip 0-hour lines.
+
+### 20.4 Exception flags (Analytics)
+
+Workspace **Zoho Analytics All** (`2604071000000006002`). Add the Install Lines module to the Projects connector and join on Task ID.
+
+- Labor % = actual / planned task hours
+- Completion % = sum(`hours_each * qty_done`) / sum(`hours_each * sold_qty`)
+- Variance = Labor % − Completion %
+- Hours since last progress = current logged − `hours_logged_at_last_progress`
+- Largest unfinished = max(`hours_each * (sold_qty - qty_done)`) among unfinished rows
+- Grace: no color until hours since last progress > largest unfinished × 1.10
+- After grace: ≤10 pts normal, 10–20 warning, >20 red
+- Always red: actual > 100% planned; Labor≥50% and Completion<25%; Labor≥75% and Completion<60%
+- Skip if no sold lines or all qty done. Programming uses rolled-up actuals vs parent planned hours.
+- Reset `hours_logged_at_last_progress` only when `qty_done` increases. Evaluate nightly or on timesheet submit.
+
+The `zcrm` connection needs attachment download and inventory-template print access. The `projects` connection needs document create access (`ZohoProjects.documents.CREATE`) and custom-module create. CRM `create_project` also needs Zoho Creator read (`zoho.creator.getRecordById` / `getRecords`) for sold lines.
+
 
