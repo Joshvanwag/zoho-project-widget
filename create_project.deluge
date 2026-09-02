@@ -900,10 +900,34 @@ try
 				if(lookupSheets != null && lookupSheets.size() > 0 && lookupSheets.get(0) != null && lookupSheets.get(0).get("id") != null)
 				{
 					bestSheet = lookupSheets.get(0);
-					bestTime = ifnull(bestSheet.get("Modified_Time"),ifnull(bestSheet.get("Created_Time"),""));
+					bestTime = 0.0;
+					bestTimeStamp = ifnull(bestSheet.get("Modified_Time"),ifnull(bestSheet.get("Created_Time"),"")).toString().replaceAll("[^0-9]","");
+					if(bestTimeStamp != "")
+					{
+						try
+						{
+							bestTime = bestTimeStamp.toDecimal();
+						}
+						catch(bestTimeErr)
+						{
+							bestTime = 0.0;
+						}
+					}
 					for each  sheet in lookupSheets
 					{
-						sheetTime = ifnull(sheet.get("Modified_Time"),ifnull(sheet.get("Created_Time"),""));
+						sheetTime = 0.0;
+						sheetTimeStamp = ifnull(sheet.get("Modified_Time"),ifnull(sheet.get("Created_Time"),"")).toString().replaceAll("[^0-9]","");
+						if(sheetTimeStamp != "")
+						{
+							try
+							{
+								sheetTime = sheetTimeStamp.toDecimal();
+							}
+							catch(sheetTimeErr)
+							{
+								sheetTime = 0.0;
+							}
+						}
 						if(sheetTime > bestTime)
 						{
 							bestSheet = sheet;
@@ -933,7 +957,7 @@ try
 			if(relatedSheets != null && relatedSheets.size() > 0 && relatedSheets.get(0) != null && relatedSheets.get(0).get("id") != null)
 			{
 				bestSheet = Map();
-				bestTime = "";
+				bestTime = 0.0;
 				for each  sheet in relatedSheets
 				{
 					sheetName = ifnull(sheet.get("Name"),"").toString();
@@ -949,7 +973,19 @@ try
 					}
 					if(nameLooksLikePriceSheet && (matchesSq || sqTokens.size() == 0))
 					{
-						sheetTime = ifnull(sheet.get("Modified_Time"),ifnull(sheet.get("Created_Time"),""));
+						sheetTime = 0.0;
+						sheetTimeStamp = ifnull(sheet.get("Modified_Time"),ifnull(sheet.get("Created_Time"),"")).toString().replaceAll("[^0-9]","");
+						if(sheetTimeStamp != "")
+						{
+							try
+							{
+								sheetTime = sheetTimeStamp.toDecimal();
+							}
+							catch(sheetTimeErr)
+							{
+								sheetTime = 0.0;
+							}
+						}
 						if(bestSheet.get("id") == null || sheetTime > bestTime)
 						{
 							bestSheet = sheet;
@@ -1017,7 +1053,7 @@ try
 			{
 				attachments = zoho.crm.getRelatedRecords("Attachments","Install_Price_Sheets",priceSheetId,1,200);
 				latestPdf = Map();
-				latestPdfTime = "";
+				latestPdfTime = 0.0;
 				if(attachments != null && attachments.size() > 0 && attachments.get(0) != null && attachments.get(0).get("id") != null)
 				{
 					for each  attachment in attachments
@@ -1025,11 +1061,23 @@ try
 						fileName = ifnull(attachment.get("File_Name"),"").toString().toLowerCase();
 						if(fileName.contains(".pdf"))
 						{
-							createdTime = ifnull(attachment.get("Created_Time"),ifnull(attachment.get("Modified_Time"),""));
-							if(latestPdf.get("id") == null || createdTime > latestPdfTime)
+							createdMillis = 0.0;
+							createdStamp = ifnull(attachment.get("Created_Time"),ifnull(attachment.get("Modified_Time"),"")).toString().replaceAll("[^0-9]","");
+							if(createdStamp != "")
+							{
+								try
+								{
+									createdMillis = createdStamp.toDecimal();
+								}
+								catch(pdfTimeErr)
+								{
+									createdMillis = 0.0;
+								}
+							}
+							if(latestPdf.get("id") == null || createdMillis > latestPdfTime)
 							{
 								latestPdf = attachment;
-								latestPdfTime = createdTime;
+								latestPdfTime = createdMillis;
 							}
 						}
 					}
@@ -1092,6 +1140,38 @@ try
 	try
 	{
 		salesOrderId = "";
+		soDigits = selectedSONumber.toString().replaceAll("[^0-9]","");
+		booksOrgId = "";
+		try
+		{
+			orgResp = invokeurl
+			[
+				url :"https://www.zohoapis.com/books/v3/organizations"
+				type :GET
+				connection:"books"
+			];
+			if(orgResp != null && orgResp.get("organizations") != null)
+			{
+				orgs = orgResp.get("organizations");
+				if(orgs.size() > 0)
+				{
+					booksOrgId = ifnull(orgs.get(0).get("organization_id"),"").toString();
+					for each  org in orgs
+					{
+						if(org.get("is_default_org") == true)
+						{
+							booksOrgId = ifnull(org.get("organization_id"),booksOrgId).toString();
+							break;
+						}
+					}
+				}
+			}
+		}
+		catch(orgErr)
+		{
+			booksOrgId = "";
+		}
+
 		linkToSo = quote.get("Link_to_SO");
 		try
 		{
@@ -1105,181 +1185,148 @@ try
 			salesOrderId = "";
 		}
 
-		if(salesOrderId == "")
+		if(booksOrgId != "" && salesOrderId != "")
 		{
-			soDigits = selectedSONumber.toString().replaceAll("[^0-9]","");
-			soCandidates = List();
+			try
+			{
+				booksSoCheck = invokeurl
+				[
+					url :"https://www.zohoapis.com/books/v3/salesorders/" + salesOrderId + "?organization_id=" + booksOrgId
+					type :GET
+					connection:"books"
+				];
+				if(booksSoCheck == null || booksSoCheck.get("salesorder") == null)
+				{
+					salesOrderId = "";
+				}
+			}
+			catch(booksIdCheckErr)
+			{
+				salesOrderId = "";
+			}
+		}
+
+		if(salesOrderId == "" && booksOrgId != "")
+		{
+			soNumberCandidates = List();
 			if(selectedSONumber.toString() != "")
 			{
-				soCandidates.add(selectedSONumber.toString());
+				soNumberCandidates.add(selectedSONumber.toString());
 			}
 			if(soDigits != "")
 			{
 				if(soDigits != selectedSONumber.toString())
 				{
-					soCandidates.add(soDigits);
+					soNumberCandidates.add(soDigits);
 				}
-				soCandidates.add("SO-" + soDigits);
-				soCandidates.add("SO " + soDigits);
+				soNumberCandidates.add("SO-" + soDigits);
 			}
-			soSearchFields = List();
-			soSearchFields.add("Subject");
-			soSearchFields.add("SO_Number");
-			soSearchFields.add("Sales_Order_Number");
-			for each  soCandidate in soCandidates
+			for each  soNum in soNumberCandidates
 			{
-				if(salesOrderId == "")
+				if(salesOrderId == "" && soNum != "")
 				{
-					for each  soField in soSearchFields
+					try
 					{
-						try
+						booksList = invokeurl
+						[
+							url :"https://www.zohoapis.com/books/v3/salesorders?organization_id=" + booksOrgId + "&salesorder_number=" + encodeUrl(soNum) + "&filter_by=Status.All"
+							type :GET
+							connection:"books"
+						];
+						if(booksList != null && booksList.get("salesorders") != null && booksList.get("salesorders").size() > 0)
 						{
-							soMatches = zoho.crm.searchRecords("Sales_Orders","(" + soField + ":equals:" + soCandidate + ")");
-							if(soMatches != null && soMatches.size() > 0 && soMatches.get(0) != null && soMatches.get(0).get("id") != null)
-							{
-								salesOrderId = soMatches.get(0).get("id").toString();
-							}
+							salesOrderId = ifnull(booksList.get("salesorders").get(0).get("salesorder_id"),"").toString();
 						}
-						catch(soSearchErr)
-						{
-						}
-						if(salesOrderId == "" && soDigits != "")
-						{
-							try
-							{
-								soMatches = zoho.crm.searchRecords("Sales_Orders","(" + soField + ":contains:" + soDigits + ")");
-								if(soMatches != null && soMatches.size() > 0 && soMatches.get(0) != null && soMatches.get(0).get("id") != null)
-								{
-									salesOrderId = soMatches.get(0).get("id").toString();
-								}
-							}
-							catch(soContainsErr)
-							{
-							}
-						}
+					}
+					catch(booksNumErr)
+					{
 					}
 				}
 			}
 		}
 
-		if(salesOrderId == "" && dealId != "" && soDigits != "")
+		if(salesOrderId == "" && booksOrgId != "" && dealId != "")
 		{
 			try
 			{
-				relatedSOs = zoho.crm.getRelatedRecords("Sales_Orders","Deals",dealId,1,200);
-				if(relatedSOs != null)
-				{
-					for each  relatedSO in relatedSOs
-					{
-						if(salesOrderId == "" && relatedSO != null && relatedSO.get("id") != null)
-						{
-							relatedSubject = ifnull(relatedSO.get("Subject"),"").toString().replaceAll("[^0-9]","");
-							relatedSoNumber = ifnull(relatedSO.get("SO_Number"),"").toString().replaceAll("[^0-9]","");
-							relatedSalesOrderNumber = ifnull(relatedSO.get("Sales_Order_Number"),"").toString().replaceAll("[^0-9]","");
-							if(relatedSubject == soDigits || relatedSoNumber == soDigits || relatedSalesOrderNumber == soDigits)
-							{
-								salesOrderId = relatedSO.get("id").toString();
-							}
-						}
-					}
-				}
-			}
-			catch(relatedSoErr)
-			{
-			}
-		}
-
-		if(salesOrderId == "" && soDigits != "")
-		{
-			try
-			{
-				coqlBody = Map();
-				coqlBody.put("select_query","select id, Subject from Sales_Orders where Subject like '%" + soDigits + "%' limit 5");
-				coqlResp = invokeurl
+				booksByDeal = invokeurl
 				[
-					url :"https://www.zohoapis.com/crm/v2/coql"
-					type :POST
-					body:coqlBody.toString()
-					headers:headersMap
-					connection:"zcrm"
+					url :"https://www.zohoapis.com/books/v3/salesorders?organization_id=" + booksOrgId + "&zcrm_potential_id=" + dealId + "&filter_by=Status.All"
+					type :GET
+					connection:"books"
 				];
-				if(coqlResp != null && coqlResp.get("data") != null && coqlResp.get("data").size() > 0)
+				if(booksByDeal != null && booksByDeal.get("salesorders") != null)
 				{
-					salesOrderId = coqlResp.get("data").get(0).get("id").toString();
+					for each  booksSo in booksByDeal.get("salesorders")
+					{
+						if(salesOrderId == "" && booksSo != null)
+						{
+							booksSoNumber = ifnull(booksSo.get("salesorder_number"),"").toString().replaceAll("[^0-9]","");
+							if(soDigits == "" || booksSoNumber == soDigits)
+							{
+								salesOrderId = ifnull(booksSo.get("salesorder_id"),"").toString();
+							}
+						}
+					}
 				}
 			}
-			catch(soCoqlErr)
+			catch(booksDealErr)
 			{
 			}
 		}
 
-		if(salesOrderId != "")
+		if(salesOrderId == "" && booksOrgId != "" && soDigits != "")
+		{
+			try
+			{
+				booksSearch = invokeurl
+				[
+					url :"https://www.zohoapis.com/books/v3/salesorders?organization_id=" + booksOrgId + "&search_text=" + soDigits + "&filter_by=Status.All"
+					type :GET
+					connection:"books"
+				];
+				if(booksSearch != null && booksSearch.get("salesorders") != null)
+				{
+					for each  booksSo in booksSearch.get("salesorders")
+					{
+						if(salesOrderId == "" && booksSo != null)
+						{
+							booksSoNumber = ifnull(booksSo.get("salesorder_number"),"").toString().replaceAll("[^0-9]","");
+							if(booksSoNumber == soDigits)
+							{
+								salesOrderId = ifnull(booksSo.get("salesorder_id"),"").toString();
+							}
+						}
+					}
+				}
+			}
+			catch(booksSearchErr)
+			{
+			}
+		}
+
+		if(salesOrderId != "" && booksOrgId != "")
 		{
 			hasSoPdf = false;
 			try
 			{
-				templateResponse = invokeurl
+				soPdf = invokeurl
 				[
-					url :"https://www.zohoapis.com/crm/v2/settings/inventory_templates?module=Sales_Orders"
+					url :"https://www.zohoapis.com/books/v3/salesorders/" + salesOrderId + "?organization_id=" + booksOrgId + "&accept=pdf"
 					type :GET
-					connection:"zcrm"
+					connection:"books"
 				];
-				soTemplateId = "";
-				if(templateResponse != null && templateResponse.get("inventory_templates") != null)
-				{
-					soTemplates = templateResponse.get("inventory_templates");
-					if(soTemplates.size() > 0)
-					{
-						soTemplateId = ifnull(soTemplates.get(0).get("id"),"");
-						for each  soTemplate in soTemplates
-						{
-							templateName = ifnull(soTemplate.get("name"),"").toLowerCase();
-							if(templateName.contains("standard") || templateName.contains("sales order"))
-							{
-								soTemplateId = ifnull(soTemplate.get("id"),soTemplateId);
-								break;
-							}
-						}
-					}
-				}
-				if(soTemplateId != "")
-				{
-					soPdf = invokeurl
-					[
-						url :"https://www.zohoapis.com/crm/v2/settings/inventory_templates/" + soTemplateId + "/actions/print_preview?record_id=" + salesOrderId + "&print_type=pdf"
-						type :GET
-						connection:"zcrm"
-					];
-					hasSoPdf = true;
-				}
+				soPdf.setFileName("SO " + selectedSONumber + ".pdf");
+				soPdf.setParamName("uploaddoc");
+				hasSoPdf = true;
 			}
-			catch(templatePdfErr)
+			catch(soPdfErr)
 			{
 				hasSoPdf = false;
 			}
 
-			if(!hasSoPdf)
-			{
-				try
-				{
-					soPdf = invokeurl
-					[
-						url :"https://www.zohoapis.com/crm/v2/Sales_Orders/" + salesOrderId + "/pdf"
-						type :GET
-						connection:"zcrm"
-					];
-					hasSoPdf = true;
-				}
-				catch(soPdfErr)
-				{
-					hasSoPdf = false;
-				}
-			}
-
 			if(hasSoPdf)
 			{
-				soPdf.setFileName("SO " + selectedSONumber + ".pdf");
-				soPdf.setParamName("uploaddoc");
 				soUploadResponse = invokeurl
 				[
 					url :documentsUrl
@@ -1291,19 +1338,27 @@ try
 			}
 			else
 			{
-				warnings.add("The Sales Order PDF could not be generated for SO " + selectedSONumber + ".");
+				warnings.add("The Books Sales Order PDF could not be generated for SO " + selectedSONumber + ".");
 			}
 		}
 		else
 		{
-			warnings.add("No CRM Sales Order was found for SO " + selectedSONumber + ".");
+			if(booksOrgId == "")
+			{
+				warnings.add("Could not load the Zoho Books organization, so the Sales Order PDF was not uploaded.");
+			}
+			else
+			{
+				warnings.add("No Zoho Books Sales Order was found for SO " + selectedSONumber + ".");
+			}
 		}
 	}
 	catch(soErr)
 	{
-		warnings.add("Sales Order PDF upload failed.");
+		warnings.add("Sales Order PDF upload failed: " + soErr.toString());
 	}
 	}
+
 
 	if(!applyHoursOnly)
 	{
@@ -1500,10 +1555,26 @@ try
 					creatorSheetId = ifnull(priceSheet.get("Creator_Record_ID"),"").toString();
 					if(creatorSheetId == "")
 					{
-						creatorSearch = zoho.creator.getRecords("tvspro","application-by-chris","All_Price_Sheets","CRM_Install_Price_Sheet_ID == \"" + priceSheetId + "\"",1,1,"creator_connection");
-						if(creatorSearch != null && creatorSearch.size() > 0)
+						try
 						{
-							creatorSheetId = ifnull(creatorSearch.get(0).get("ID"),"").toString();
+							creatorSearch = zoho.creator.getRecords("tvspro","application-by-chris","All_Price_Sheets","CRM_Install_Price_Sheet_ID == \"" + priceSheetId + "\"",1,1,"creator_connection");
+							try
+							{
+								if(creatorSearch.containsKey("data"))
+								{
+									creatorSearch = creatorSearch.get("data");
+								}
+							}
+							catch(unwrapCreatorSearchErr)
+							{
+							}
+							if(creatorSearch != null && creatorSearch.size() > 0)
+							{
+								creatorSheetId = ifnull(creatorSearch.get(0).get("ID"),"").toString();
+							}
+						}
+						catch(creatorSearchErr)
+						{
 						}
 					}
 					soldLookups = List();
@@ -1526,16 +1597,39 @@ try
 						{
 						}
 					}
-					if((soldLookups == null || soldLookups.size() <= 0) && (creatorSheetId != "" || priceSheetId != ""))
+					if((soldLookups == null || soldLookups.size() <= 0))
 					{
 						try
 						{
-							lookupCriteria = "ID == " + creatorSheetId;
-							if(creatorSheetId == "")
+							creatorSearchRows = null;
+							if(priceSheetId != "")
 							{
-								lookupCriteria = "CRM_Install_Price_Sheet_ID == \"" + priceSheetId + "\"";
+								creatorSearchRows = zoho.creator.getRecords("tvspro","application-by-chris","All_Price_Sheets","CRM_Install_Price_Sheet_ID == \"" + priceSheetId + "\"",1,1,"creator_connection");
+								try
+								{
+									if(creatorSearchRows.containsKey("data"))
+									{
+										creatorSearchRows = creatorSearchRows.get("data");
+									}
+								}
+								catch(unwrapCrmIdRowsErr)
+								{
+								}
 							}
-							creatorSearchRows = zoho.creator.getRecords("tvspro","application-by-chris","All_Price_Sheets",lookupCriteria,1,1,"creator_connection");
+							if((creatorSearchRows == null || creatorSearchRows.size() <= 0) && creatorSheetId != "")
+							{
+								creatorSearchRows = zoho.creator.getRecords("tvspro","application-by-chris","All_Price_Sheets","ID == " + creatorSheetId,1,1,"creator_connection");
+								try
+								{
+									if(creatorSearchRows.containsKey("data"))
+									{
+										creatorSearchRows = creatorSearchRows.get("data");
+									}
+								}
+								catch(unwrapIdRowsErr)
+								{
+								}
+							}
 							if(creatorSearchRows != null && creatorSearchRows.size() > 0)
 							{
 								searchSheet = creatorSearchRows.get(0);
