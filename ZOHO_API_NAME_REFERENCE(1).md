@@ -755,7 +755,7 @@ Module `install_line` (`1684307000018866196`). Written at project create only; n
 | `related_task_id` | Copied sister task or Programming parent |
 | `catalog_line_id` | Creator `Install_Line_Items` ID |
 
-Creator source: workspace `tvspro`, app `application-by-chris`. Join CRM `Install_Price_Sheets.Creator_Record_ID` or Creator `CRM_Install_Price_Sheet_ID`. Sold rows come from the Price Sheet `Line_Item_Lookup` subform. The `All_Line_Item_Lookups` report has no parent Price Sheet field, so `All_Price_Sheets` must include the Line Item Lookup column or `getRecordById` returns no sold lines.
+Creator source: workspace `tvspro`, app `application-by-chris`. Join CRM `Install_Price_Sheets.Creator_Record_ID` or Creator `CRM_Install_Price_Sheet_ID`. Sold rows come from the Price Sheet `Line_Item_Lookup` subform on `All_Price_Sheets`. If a nested row omits `Quantity`, `create_project` loads the full record from `All_Line_Item_Lookups`. CRM uses the `creator_connection` connection.
 
 Mapping: catalog `Task_Category` + `Tier` → sister task. `Component` → Component Management. All Programming-category lines → Programming parent. Deduplicate by line name + task and sum qty. Skip 0-hour lines.
 

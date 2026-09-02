@@ -1045,7 +1045,7 @@ try
 
 		if(salesOrderId != "")
 		{
-			soPdf = null;
+			hasSoPdf = false;
 			try
 			{
 				templateResponse = invokeurl
@@ -1080,14 +1080,15 @@ try
 						type :GET
 						connection:"zcrm"
 					];
+					hasSoPdf = true;
 				}
 			}
 			catch(templatePdfErr)
 			{
-				soPdf = null;
+				hasSoPdf = false;
 			}
 
-			if(soPdf == null)
+			if(!hasSoPdf)
 			{
 				try
 				{
@@ -1097,14 +1098,15 @@ try
 						type :GET
 						connection:"zcrm"
 					];
+					hasSoPdf = true;
 				}
 				catch(soPdfErr)
 				{
-					soPdf = null;
+					hasSoPdf = false;
 				}
 			}
 
-			if(soPdf != null)
+			if(hasSoPdf)
 			{
 				soPdf.setFileName("SO " + selectedSONumber + ".pdf");
 				soPdf.setParamName("uploaddoc");
@@ -1335,7 +1337,7 @@ try
 					{
 						if(creatorSheetId != "")
 						{
-							warnings.add("Creator sold lines were not returned. Add the Line Item Lookup column to the All Price Sheets report in Creator, then create a new project. Task hours were still applied.");
+							warnings.add("Creator sold lines were not returned for this price sheet. Task hours were still applied.");
 						}
 					}
 					else
@@ -1372,6 +1374,26 @@ try
 						bucketKeys = List();
 						for each  soldLookup in soldLookups
 						{
+							lookupId = ifnull(soldLookup.get("ID"),"").toString();
+							if(soldLookup.get("Quantity") == null && lookupId != "")
+							{
+								try
+								{
+									fullLookup = zoho.creator.getRecordById("tvspro","application-by-chris","All_Line_Item_Lookups",lookupId,"creator_connection");
+									lookupData = fullLookup;
+									if(fullLookup != null && fullLookup.get("data") != null)
+									{
+										lookupData = fullLookup.get("data");
+									}
+									if(lookupData != null)
+									{
+										soldLookup = lookupData;
+									}
+								}
+								catch(fullLookupErr)
+								{
+								}
+							}
 							catalogRef = soldLookup.get("Install_Line_Items_Hours_Cost");
 							if(catalogRef != null)
 							{
