@@ -1220,6 +1220,78 @@ async function saveEditableDealFieldsIfNeeded() {
   return payload;
 }
 
+function isFlagTrue(value) {
+  return value === true || value === "true" || value === 1 || value === "1";
+}
+
+function warningList(details) {
+  if (!details) return [];
+  if (Array.isArray(details.warnings)) {
+    return details.warnings.filter(Boolean);
+  }
+  if (typeof details.warnings === "string" && details.warnings) {
+    return [details.warnings];
+  }
+  return [];
+}
+
+async function executeCreateProject(payload) {
+  const response = await ZOHO.CRM.FUNCTIONS.execute(cfg.createProjectFunctionName, {
+    arguments: JSON.stringify(payload)
+  });
+  debug({ functionResponse: response, payloadKeys: Object.keys(payload) });
+  return parseFunctionResult(response);
+}
+
+function buildCreateProjectArgs() {
+  const selectedQuote = state.eligibleQuotes.find(q => q.id === state.selectedQuoteId);
+  const salesOrderNumber = normalize(selectedQuote?.[cfg.quoteSoNumberField]);
+  const crmQuoteNumber = normalize(selectedQuote?.CRM_Quote_Number || selectedQuote?.Quote_Number);
+  const quoteNumber = normalize(selectedQuote?.Quote_Number);
+
+  return {
+    deal_id: state.dealId,
+    quote_id: state.selectedQuoteId,
+    sales_order_number: salesOrderNumber,
+    crm_quote_number: crmQuoteNumber,
+    quote_number: quoteNumber,
+    price_sheet_id: state.matchedPriceSheet?.id || "",
+    field_values: buildFieldValuesPayload()
+  };
+}
+
+async function waitForTemplateTasks(projectId) {
+  const maxAttempts = cfg.hoursPollMaxAttempts || 30;
+  const intervalMs = cfg.hoursPollIntervalMs || 1000;
+  const readyAt = cfg.templateTaskReadyCount || 20;
+  let lastDetails = { hours_ready: false, task_count: 0, ready_count: readyAt };
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      lastDetails = await executeCreateProject({
+        check_tasks_only: true,
+        project_id: projectId
+      });
+    } catch (pollErr) {
+      lastDetails = { hours_ready: false, task_count: lastDetails.task_count || 0, ready_count: readyAt };
+    }
+
+    const count = Number(lastDetails.task_count || 0);
+    const needed = Number(lastDetails.ready_count || readyAt);
+    setMessage("info", `Waiting for template tasks (${count} of ${needed})...`);
+
+    if (isFlagTrue(lastDetails.hours_ready) || count >= needed) {
+      return lastDetails;
+    }
+
+    if (attempt < maxAttempts) {
+      await sleep(intervalMs);
+    }
+  }
+
+  return lastDetails;
+}
+
 async function createProject() {
   let createdProject = false;
   validateDeal();
@@ -1244,53 +1316,88 @@ async function createProject() {
       }
     }
 
-    const selectedQuote = state.eligibleQuotes.find(q => q.id === state.selectedQuoteId);
-    const salesOrderNumber = normalize(selectedQuote?.[cfg.quoteSoNumberField]);
-    const fieldValues = buildFieldValuesPayload();
-    const crmQuoteNumber = normalize(selectedQuote?.CRM_Quote_Number || selectedQuote?.Quote_Number);
-    const quoteNumber = normalize(selectedQuote?.Quote_Number);
+    const createArgs = buildCreateProjectArgs();
 
     setMessage("", "");
 
-    const response = await ZOHO.CRM.FUNCTIONS.execute(cfg.createProjectFunctionName, {
-      arguments: JSON.stringify({
-        deal_id: state.dealId,
-        quote_id: state.selectedQuoteId,
-        sales_order_number: salesOrderNumber,
-        crm_quote_number: crmQuoteNumber,
-        quote_number: quoteNumber,
-        price_sheet_id: state.matchedPriceSheet?.id || "",
-        field_values: fieldValues
-      })
-    });
-
-    debug({ functionResponse: response });
-
-    const details = parseFunctionResult(response);
+    const details = await executeCreateProject(createArgs);
 
     if (!details || details.success !== true) {
       throw new Error(details?.message || "The Project was not created.");
     }
 
     const projectName = details.project_name ? ` ${details.project_name}` : "";
-    const warnings = Array.isArray(details.warnings)
-      ? details.warnings.filter(Boolean)
-      : (typeof details.warnings === "string" && details.warnings ? [details.warnings] : []);
-    const successText = details.message || `Project created successfully.${projectName}`;
-    setMessage(warnings.length > 0 ? "warning" : "success", successText);
+    let warnings = warningList(details);
     createdProject = true;
     state.projectCreated = true;
     els.createButton.textContent = "Project Created";
     els.createButton.disabled = true;
     els.refreshButton.disabled = true;
 
-    if (warnings.length === 0) {
+    let hoursDetails = null;
+    if (isFlagTrue(details.hours_pending) && details.project_id) {
+      try {
+        setMessage("info", `Project created.${projectName} Waiting for template tasks...`);
+        const readyDetails = await waitForTemplateTasks(details.project_id);
+
+        if (isFlagTrue(readyDetails.hours_ready) || Number(readyDetails.task_count || 0) >= Number(readyDetails.ready_count || cfg.templateTaskReadyCount || 20)) {
+          setMessage("info", "Template tasks are ready. Applying price sheet hours...");
+          hoursDetails = await executeCreateProject({
+            ...createArgs,
+            apply_hours_only: true,
+            project_id: details.project_id,
+            project_key: details.project_key || "",
+            project_name: details.project_name || ""
+          });
+
+          if (!hoursDetails || hoursDetails.success !== true) {
+            warnings.push(hoursDetails?.message || "Price sheet hours could not be applied after the project was created.");
+          } else if (isFlagTrue(hoursDetails.hours_pending)) {
+            warnings.push("Template tasks were not ready yet, so price sheet hours were not applied.");
+          } else {
+            warnings.push(...warningList(hoursDetails));
+          }
+        } else {
+          warnings.push("Template tasks were not ready yet, so price sheet hours were not applied.");
+        }
+      } catch (hoursErr) {
+        warnings.push(hoursErr.message || "Price sheet hours could not be applied after the project was created.");
+      }
+    }
+
+    const uniqueWarnings = [...new Set(warnings.filter(Boolean))];
+    const hoursApplied = isFlagTrue(hoursDetails?.hours_applied) || Number(hoursDetails?.tasks_updated || 0) > 0;
+    let successText = details.message || `Project created successfully.${projectName}`;
+    if (hoursApplied) {
+      const appliedCount = Number(hoursDetails.tasks_updated || 0);
+      const lineCount = Number(hoursDetails.line_items_created || 0);
+      const extra = [];
+      if (appliedCount > 0) extra.push(`Applied price sheet hours to ${appliedCount} task(s).`);
+      if (lineCount > 0) extra.push(`Created ${lineCount} install line(s).`);
+      if (extra.length > 0) {
+        successText = `Project created successfully.${projectName} ${extra.join(" ")}`;
+      }
+    }
+    if (uniqueWarnings.length > 0) {
+      successText = `${successText} Warnings: ${uniqueWarnings.join(" ")}`;
+    }
+
+    setMessage(uniqueWarnings.length > 0 ? "warning" : "success", successText);
+
+    if (uniqueWarnings.length === 0) {
       closeWidgetAfterSuccess();
     }
   } catch (error) {
-    setMessage("error", error.message || "Error creating Project.");
-    els.createButton.disabled = false;
-    els.createButton.textContent = hasPendingDealUpdates() ? "Save & Create Project" : "Create Project";
+    if (createdProject) {
+      setMessage("warning", error.message || "Project created, but a follow-up step failed.");
+      els.createButton.textContent = "Project Created";
+      els.createButton.disabled = true;
+      els.refreshButton.disabled = true;
+    } else {
+      setMessage("error", error.message || "Error creating Project.");
+      els.createButton.disabled = false;
+      els.createButton.textContent = hasPendingDealUpdates() ? "Save & Create Project" : "Create Project";
+    }
   } finally {
     state.isBusy = false;
     if (!createdProject) {

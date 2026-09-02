@@ -14,6 +14,18 @@ try
 	dealId = ifnull(args.get("deal_id"),"");
 	quoteId = ifnull(args.get("quote_id"),"");
 	selectedSONumber = ifnull(args.get("sales_order_number"),"");
+	checkTasksOnly = false;
+	applyHoursOnly = false;
+	checkArg = args.get("check_tasks_only");
+	if(checkArg == true || checkArg == "true" || checkArg == "1")
+	{
+		checkTasksOnly = true;
+	}
+	applyArg = args.get("apply_hours_only");
+	if(applyArg == true || applyArg == "true" || applyArg == "1")
+	{
+		applyHoursOnly = true;
+	}
 
 	fieldValuesArg = args.get("field_values");
 	if(fieldValuesArg == null)
@@ -22,6 +34,8 @@ try
 	}
 
 	portalId = "724354547";
+	// Conference and Collaboration copies ~26 tasks. Wait for most of them so hours are not stamped on a partial copy.
+	templateTaskReadyCount = 20;
 	projectTemplateId = "1684307000012655127";
 	projectLayoutId = "1684307000004725041";
 	kickoffStatusId = "1684307000007196436";
@@ -31,6 +45,51 @@ try
 	joshZpuid = "1684307000015406166";
 	joshZuid = "903101142";
 	joshEmail = "joshv@goclearvista.com";
+
+	if(checkTasksOnly)
+	{
+		projectId = ifnull(args.get("project_id"),"");
+		if(projectId == "")
+		{
+			result = Map();
+			result.put("success",false);
+			result.put("message","Missing Project ID.");
+			return result.toString();
+		}
+		copiedTasks = List();
+		try
+		{
+			taskResponse = invokeurl
+			[
+				url :"https://projectsapi.zoho.com/api/v3/portal/" + portalId + "/projects/" + projectId + "/tasks?per_page=200"
+				type :GET
+				connection:"projects"
+			];
+			if(taskResponse != null && taskResponse.get("tasks") != null)
+			{
+				copiedTasks = taskResponse.get("tasks");
+			}
+		}
+		catch(taskPollErr)
+		{
+			copiedTasks = List();
+		}
+		taskCount = copiedTasks.size();
+		hoursReady = false;
+		if(taskCount >= templateTaskReadyCount)
+		{
+			hoursReady = true;
+		}
+		result = Map();
+		result.put("success",true);
+		result.put("hours_pending",!hoursReady);
+		result.put("hours_ready",hoursReady);
+		result.put("hours_applied",false);
+		result.put("task_count",taskCount);
+		result.put("ready_count",templateTaskReadyCount);
+		result.put("project_id",projectId);
+		return result.toString();
+	}
 
 	if(dealId == "")
 	{
@@ -239,6 +298,23 @@ try
 		return result.toString();
 	}
 
+	if(applyHoursOnly)
+	{
+		projectId = ifnull(args.get("project_id"),"").toString();
+		if(projectId == "")
+		{
+			result = Map();
+			result.put("success",false);
+			result.put("message","Missing Project ID.");
+			return result.toString();
+		}
+		projectKey = ifnull(args.get("project_key"),"");
+		projectName = ifnull(args.get("project_name"),"");
+		headersMap = Map();
+		headersMap.put("Content-Type","application/json");
+	}
+	else
+	{
 	missing = List();
 
 	if(dealName == "")
@@ -770,6 +846,7 @@ try
 		result.put("project_name",projectName);
 		return result.toString();
 	}
+	}
 
 	warnings = List();
 	pdfUploads = List();
@@ -780,6 +857,9 @@ try
 	tasksUpdated = 0;
 	lineItemsCreated = 0;
 	taskCount = 0;
+	hoursPending = false;
+	hoursApplied = false;
+	hoursReady = false;
 	documentsUrl = "https://projectsapi.zoho.com/restapi/portal/" + portalId + "/projects/" + projectId + "/documents/";
 
 	// PDF uploads and task-hour updates must never fail project creation.
@@ -931,6 +1011,8 @@ try
 			{
 			}
 
+			if(!applyHoursOnly)
+			{
 			try
 			{
 				attachments = zoho.crm.getRelatedRecords("Attachments","Install_Price_Sheets",priceSheetId,1,200);
@@ -986,6 +1068,7 @@ try
 			{
 				warnings.add("Price sheet PDF upload failed.");
 			}
+			}
 		}
 		else
 		{
@@ -1004,6 +1087,8 @@ try
 		warnings.add("Price sheet lookup failed.");
 	}
 
+	if(!applyHoursOnly)
+	{
 	try
 	{
 		salesOrderId = "";
@@ -1022,24 +1107,71 @@ try
 
 		if(salesOrderId == "")
 		{
+			soDigits = selectedSONumber.toString().replaceAll("[^0-9]","");
+			soCandidates = List();
+			if(selectedSONumber.toString() != "")
+			{
+				soCandidates.add(selectedSONumber.toString());
+			}
+			if(soDigits != "")
+			{
+				if(soDigits != selectedSONumber.toString())
+				{
+					soCandidates.add(soDigits);
+				}
+				soCandidates.add("SO-" + soDigits);
+				soCandidates.add("SO " + soDigits);
+			}
 			soSearchFields = List();
 			soSearchFields.add("Subject");
 			soSearchFields.add("SO_Number");
 			soSearchFields.add("Sales_Order_Number");
-			for each  soField in soSearchFields
+			for each  soCandidate in soCandidates
 			{
-				try
+				if(salesOrderId == "")
 				{
-					soMatches = zoho.crm.searchRecords("Sales_Orders","(" + soField + ":equals:" + selectedSONumber + ")");
-					if(soMatches != null && soMatches.size() > 0 && soMatches.get(0) != null && soMatches.get(0).get("id") != null)
+					for each  soField in soSearchFields
 					{
-						salesOrderId = soMatches.get(0).get("id").toString();
-						break;
+						try
+						{
+							soMatches = zoho.crm.searchRecords("Sales_Orders","(" + soField + ":equals:" + soCandidate + ")");
+							if(soMatches != null && soMatches.size() > 0 && soMatches.get(0) != null && soMatches.get(0).get("id") != null)
+							{
+								salesOrderId = soMatches.get(0).get("id").toString();
+							}
+						}
+						catch(soSearchErr)
+						{
+						}
 					}
 				}
-				catch(soSearchErr)
+			}
+		}
+
+		if(salesOrderId == "" && dealId != "" && soDigits != "")
+		{
+			try
+			{
+				relatedSOs = zoho.crm.getRelatedRecords("Sales_Orders","Deals",dealId,1,200);
+				if(relatedSOs != null)
 				{
+					for each  relatedSO in relatedSOs
+					{
+						if(salesOrderId == "" && relatedSO != null && relatedSO.get("id") != null)
+						{
+							relatedSubject = ifnull(relatedSO.get("Subject"),"").toString().replaceAll("[^0-9]","");
+							relatedSoNumber = ifnull(relatedSO.get("SO_Number"),"").toString().replaceAll("[^0-9]","");
+							relatedSalesOrderNumber = ifnull(relatedSO.get("Sales_Order_Number"),"").toString().replaceAll("[^0-9]","");
+							if(relatedSubject == soDigits || relatedSoNumber == soDigits || relatedSalesOrderNumber == soDigits)
+							{
+								salesOrderId = relatedSO.get("id").toString();
+							}
+						}
+					}
 				}
+			}
+			catch(relatedSoErr)
+			{
 			}
 		}
 
@@ -1133,7 +1265,18 @@ try
 	{
 		warnings.add("Sales Order PDF upload failed.");
 	}
+	}
 
+	if(!applyHoursOnly)
+	{
+		if(priceSheet != null && priceSheet.get("id") != null)
+		{
+			hoursPending = true;
+		}
+	}
+
+	if(applyHoursOnly)
+	{
 	try
 	{
 		if(priceSheet != null && priceSheet.get("id") != null)
@@ -1194,45 +1337,33 @@ try
 			taskHours.put("Assembly||Programming",programmingParentHours);
 
 			copiedTasks = List();
-			pollAttempts = List();
-			pollAttempts.add(1);
-			pollAttempts.add(2);
-			pollAttempts.add(3);
-			pollAttempts.add(4);
-			pollAttempts.add(5);
-			pollAttempts.add(6);
-			pollAttempts.add(7);
-			pollAttempts.add(8);
-			pollAttempts.add(9);
-			pollAttempts.add(10);
-			pollAttempts.add(11);
-			pollAttempts.add(12);
-			for each  pollAttempt in pollAttempts
+			try
 			{
-				try
+				taskResponse = invokeurl
+				[
+					url :"https://projectsapi.zoho.com/api/v3/portal/" + portalId + "/projects/" + projectId + "/tasks?per_page=200"
+					type :GET
+					connection:"projects"
+				];
+				if(taskResponse != null && taskResponse.get("tasks") != null)
 				{
-					taskResponse = invokeurl
-					[
-						url :"https://projectsapi.zoho.com/api/v3/portal/" + portalId + "/projects/" + projectId + "/tasks?per_page=200"
-						type :GET
-						connection:"projects"
-					];
-					if(taskResponse != null && taskResponse.get("tasks") != null)
-					{
-						copiedTasks = taskResponse.get("tasks");
-						if(copiedTasks.size() >= 10)
-						{
-							break;
-						}
-					}
-				}
-				catch(taskPollErr)
-				{
+					copiedTasks = taskResponse.get("tasks");
 				}
 			}
-
-			if(copiedTasks.size() > 0)
+			catch(taskPollErr)
 			{
+				copiedTasks = List();
+			}
+			taskCount = copiedTasks.size();
+			if(taskCount >= templateTaskReadyCount)
+			{
+				hoursReady = true;
+			}
+
+			if(hoursReady)
+			{
+				hoursApplied = true;
+				hoursPending = false;
 				for each  copiedTask in copiedTasks
 				{
 					copiedName = ifnull(copiedTask.get("name"),"").toString().replaceAll("&amp;","&").trim();
@@ -1560,7 +1691,7 @@ try
 			}
 			else
 			{
-				warnings.add("Template tasks were not ready yet, so price sheet hours were not applied.");
+				hoursPending = true;
 			}
 		}
 	}
@@ -1568,47 +1699,39 @@ try
 	{
 		warnings.add("Price sheet hours could not be applied to project tasks.");
 	}
+	}
 
-	// Template task copying is asynchronous, so this verification is informational only.
-	try
+	if(applyHoursOnly)
 	{
-		verifyResponse = invokeurl
-		[
-			url :"https://projectsapi.zoho.com/api/v3/portal/" + portalId + "/projects/" + projectId
-			type :GET
-			connection:"projects"
-		];
-
-		if(verifyResponse != null && !verifyResponse.containsKey("error"))
+		successMessage = "Price sheet hours were applied to project tasks.";
+		if(hoursPending)
 		{
-			taskInfo = verifyResponse.get("tasks");
-			if(taskInfo != null)
-			{
-				taskCount = ifnull(taskInfo.get("open_count"),0) + ifnull(taskInfo.get("closed_count"),0);
-			}
+			successMessage = "Template tasks are not ready yet.";
+		}
+		if(tasksUpdated > 0)
+		{
+			successMessage = "Applied price sheet hours to " + tasksUpdated.toString() + " task(s).";
+		}
+		if(lineItemsCreated > 0)
+		{
+			successMessage = successMessage + " Created " + lineItemsCreated.toString() + " install line(s).";
+		}
+		if(warnings.size() > 0)
+		{
+			successMessage = successMessage + " Warnings: " + warnings.toString();
 		}
 	}
-	catch(verifyErr)
+	else
 	{
-		// Do not fail project creation because verification or template copying is delayed.
-	}
-
 	successMessage = "Private project created from template and linked successfully.";
 	if(pdfUploads.size() > 0)
 	{
 		successMessage = successMessage + " Uploaded " + pdfUploads.size().toString() + " PDF(s) to project documents.";
 	}
-	if(tasksUpdated > 0)
-	{
-		successMessage = successMessage + " Applied price sheet hours to " + tasksUpdated.toString() + " task(s).";
-	}
-	if(lineItemsCreated > 0)
-	{
-		successMessage = successMessage + " Created " + lineItemsCreated.toString() + " install line(s).";
-	}
 	if(warnings.size() > 0)
 	{
 		successMessage = successMessage + " Warnings: " + warnings.toString();
+	}
 	}
 
 	result = Map();
@@ -1618,6 +1741,11 @@ try
 	result.put("project_key",projectKey);
 	result.put("project_name",projectName);
 	result.put("task_count_at_verification",taskCount);
+	result.put("task_count",taskCount);
+	result.put("ready_count",templateTaskReadyCount);
+	result.put("hours_pending",hoursPending);
+	result.put("hours_ready",hoursReady);
+	result.put("hours_applied",hoursApplied);
 	result.put("tasks_updated",tasksUpdated);
 	result.put("line_items_created",lineItemsCreated);
 	result.put("pdf_uploads",pdfUploads);

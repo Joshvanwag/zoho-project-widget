@@ -18,6 +18,10 @@ window.PROJECT_WIDGET_CONFIG = {
 
   createProjectFunctionName: "create_project",
 
+  hoursPollIntervalMs: 1000,
+  hoursPollMaxAttempts: 30,
+  templateTaskReadyCount: 20,
+
   // source: "deal" values may be saved back to CRM when entered in the widget.
   // source: "project" values exist only in Projects and are never written to CRM.
   // Required fields are enforced only when their mapped Deal value is blank.
