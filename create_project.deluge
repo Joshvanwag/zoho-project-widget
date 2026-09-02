@@ -1066,7 +1066,7 @@ try
 			}
 			catch(priceSheetPdfErr)
 			{
-				warnings.add("Price sheet PDF upload failed.");
+				warnings.add("Price sheet PDF upload failed: " + priceSheetPdfErr.toString());
 			}
 			}
 		}
@@ -1143,6 +1143,20 @@ try
 						catch(soSearchErr)
 						{
 						}
+						if(salesOrderId == "" && soDigits != "")
+						{
+							try
+							{
+								soMatches = zoho.crm.searchRecords("Sales_Orders","(" + soField + ":contains:" + soDigits + ")");
+								if(soMatches != null && soMatches.size() > 0 && soMatches.get(0) != null && soMatches.get(0).get("id") != null)
+								{
+									salesOrderId = soMatches.get(0).get("id").toString();
+								}
+							}
+							catch(soContainsErr)
+							{
+							}
+						}
 					}
 				}
 			}
@@ -1171,6 +1185,30 @@ try
 				}
 			}
 			catch(relatedSoErr)
+			{
+			}
+		}
+
+		if(salesOrderId == "" && soDigits != "")
+		{
+			try
+			{
+				coqlBody = Map();
+				coqlBody.put("select_query","select id, Subject from Sales_Orders where Subject like '%" + soDigits + "%' limit 5");
+				coqlResp = invokeurl
+				[
+					url :"https://www.zohoapis.com/crm/v2/coql"
+					type :POST
+					body:coqlBody.toString()
+					headers:headersMap
+					connection:"zcrm"
+				];
+				if(coqlResp != null && coqlResp.get("data") != null && coqlResp.get("data").size() > 0)
+				{
+					salesOrderId = coqlResp.get("data").get(0).get("id").toString();
+				}
+			}
+			catch(soCoqlErr)
 			{
 			}
 		}
@@ -1381,14 +1419,29 @@ try
 					}
 					if(mappedHours > 0 && copiedTask.get("id") != null)
 					{
+						totalMinutes = (mappedHours * 60).round(0).toLong();
+						if(totalMinutes < 1)
+						{
+							totalMinutes = 1;
+						}
+						hourPart = (totalMinutes / 60).toLong();
+						minutePart = totalMinutes % 60;
+						hourText = hourPart.toString();
+						minuteText = minutePart.toString();
+						if(hourText.length() < 2)
+						{
+							hourText = "0" + hourText;
+						}
+						if(minuteText.length() < 2)
+						{
+							minuteText = "0" + minuteText;
+						}
+						durationValue = hourText + ":" + minuteText;
 						durationMap = Map();
 						durationMap.put("type","hours");
-						durationMap.put("value",mappedHours.toString());
+						durationMap.put("value",durationValue);
 						taskPayload = Map();
 						taskPayload.put("duration",durationMap);
-						budgetMap = Map();
-						budgetMap.put("hourly_budget",mappedHours.toString());
-						taskPayload.put("budget_info",budgetMap);
 						taskPayload.put("hours_logged_at_last_progress",0);
 						try
 						{
@@ -1415,7 +1468,20 @@ try
 							}
 							if(taskUpdateResponse == null || taskUpdateResponse.containsKey("error"))
 							{
-								warnings.add("Could not apply " + mappedHours.toString() + " hours to task " + copiedName + ".");
+								patchError = "Enter a valid hour format.";
+								if(taskUpdateResponse != null && taskUpdateResponse.get("error") != null)
+								{
+									errorObj = taskUpdateResponse.get("error");
+									if(errorObj.get("details") != null && errorObj.get("details").size() > 0)
+									{
+										patchError = ifnull(errorObj.get("details").get(0).get("message"),patchError);
+									}
+									else
+									{
+										patchError = ifnull(errorObj.get("title"),patchError);
+									}
+								}
+								warnings.add("Could not apply " + mappedHours.toString() + " hours to task " + copiedName + ". " + patchError);
 							}
 							else
 							{
@@ -1424,7 +1490,7 @@ try
 						}
 						catch(taskUpdateErr)
 						{
-							warnings.add("Could not apply hours to task " + copiedName + ".");
+							warnings.add("Could not apply " + mappedHours.toString() + " hours to task " + copiedName + ". " + taskUpdateErr.toString());
 						}
 					}
 				}
@@ -1457,6 +1523,33 @@ try
 							}
 						}
 						catch(sheetByIdErr)
+						{
+						}
+					}
+					if((soldLookups == null || soldLookups.size() <= 0) && (creatorSheetId != "" || priceSheetId != ""))
+					{
+						try
+						{
+							lookupCriteria = "ID == " + creatorSheetId;
+							if(creatorSheetId == "")
+							{
+								lookupCriteria = "CRM_Install_Price_Sheet_ID == \"" + priceSheetId + "\"";
+							}
+							creatorSearchRows = zoho.creator.getRecords("tvspro","application-by-chris","All_Price_Sheets",lookupCriteria,1,1,"creator_connection");
+							if(creatorSearchRows != null && creatorSearchRows.size() > 0)
+							{
+								searchSheet = creatorSearchRows.get(0);
+								if(searchSheet.get("Line_Item_Lookup") != null)
+								{
+									soldLookups = searchSheet.get("Line_Item_Lookup");
+								}
+								if(creatorSheetId == "")
+								{
+									creatorSheetId = ifnull(searchSheet.get("ID"),"").toString();
+								}
+							}
+						}
+						catch(sheetListErr)
 						{
 						}
 					}
@@ -1716,10 +1809,6 @@ try
 		{
 			successMessage = successMessage + " Created " + lineItemsCreated.toString() + " install line(s).";
 		}
-		if(warnings.size() > 0)
-		{
-			successMessage = successMessage + " Warnings: " + warnings.toString();
-		}
 	}
 	else
 	{
@@ -1727,10 +1816,6 @@ try
 	if(pdfUploads.size() > 0)
 	{
 		successMessage = successMessage + " Uploaded " + pdfUploads.size().toString() + " PDF(s) to project documents.";
-	}
-	if(warnings.size() > 0)
-	{
-		successMessage = successMessage + " Warnings: " + warnings.toString();
 	}
 	}
 

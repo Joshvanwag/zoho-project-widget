@@ -1367,19 +1367,18 @@ async function createProject() {
 
     const uniqueWarnings = [...new Set(warnings.filter(Boolean))];
     const hoursApplied = isFlagTrue(hoursDetails?.hours_applied) || Number(hoursDetails?.tasks_updated || 0) > 0;
-    let successText = details.message || `Project created successfully.${projectName}`;
+    let successText = `Project created successfully.${projectName}`.trim();
+    if (Number(details.pdf_uploads?.length || 0) > 0) {
+      successText += ` Uploaded ${details.pdf_uploads.length} PDF(s) to project documents.`;
+    }
     if (hoursApplied) {
       const appliedCount = Number(hoursDetails.tasks_updated || 0);
       const lineCount = Number(hoursDetails.line_items_created || 0);
-      const extra = [];
-      if (appliedCount > 0) extra.push(`Applied price sheet hours to ${appliedCount} task(s).`);
-      if (lineCount > 0) extra.push(`Created ${lineCount} install line(s).`);
-      if (extra.length > 0) {
-        successText = `Project created successfully.${projectName} ${extra.join(" ")}`;
-      }
+      if (appliedCount > 0) successText += ` Applied price sheet hours to ${appliedCount} task(s).`;
+      if (lineCount > 0) successText += ` Created ${lineCount} install line(s).`;
     }
     if (uniqueWarnings.length > 0) {
-      successText = `${successText} Warnings: ${uniqueWarnings.join(" ")}`;
+      successText += ` Warnings: ${uniqueWarnings.join(" ")}`;
     }
 
     setMessage(uniqueWarnings.length > 0 ? "warning" : "success", successText);
