@@ -865,16 +865,478 @@ try
 	folderRows = List();
 	folderRow = Map();
 	folderValText = "";
+	folderCandidate = "";
+	folderKeyName = "";
+	folderMaps = List();
+	folderMapItem = Map();
+	folderKeys = List();
 	foldersResp = Map();
 	v3Docs = Map();
 	v3DocsFolder = Map();
+	v3Folders = Map();
+	v3DocItems = List();
+	v3DocItem = Map();
+	v3KeysText = "";
+	v3UploadUrl = "";
+	v3UploadParams = Map();
+	v3Check = Map();
+	attrMap = Map();
+	v3NameList = "";
+	wdResp = Map();
+	wdData = List();
+	wdItem = Map();
+	wdUploadUrl = "";
+	projectFolderMap = Map();
+	teamFolderId = "";
+	workspaceLibraryId = "";
+	nestedFolders = List();
+	nestedFolder = Map();
+	innerFolders = List();
+	innerFolder = Map();
+	allNested = List();
+	matchedByName = "";
+	firstChildFolder = "";
+	nestedName = "";
+	nestedId = "";
+	folderParentId = "";
+	nameNeedle = "";
+	wdChildList = List();
+	wdChild = Map();
+	wdChildName = "";
+	wdChildId = "";
+	wdChildType = "";
+	isFolderFlag = false;
+	wdListParents = List();
+	wdListParent = "";
+	wdHeaders = Map();
+	wdListUrl = "";
+	wdListUrls = List();
+	attachmentsFolderId = "";
 	docRows = List();
 	docRow = Map();
 	docName = "";
 	documentsUrl = "https://projectsapi.zoho.com/restapi/portal/" + portalId + "/projects/" + projectId + "/documents/";
 	documentsListUrl = documentsUrl + "?range=100&category=all";
+	folderKeys.add("workdrive_folder_id");
+	folderKeys.add("thirdparty_folder_id");
+	folderKeys.add("third_party_folder_id");
+	folderKeys.add("library_id");
+	folderKeys.add("folder_id");
+	folderKeys.add("default_project_folder_id");
+	folderKeys.add("team_folder_id");
+	folderKeys.add("teamfolder_id");
+	folderKeys.add("parent_id");
+	folderKeys.add("parent_folder_id");
 	if(applyHoursOnly)
 	{
+		try
+		{
+			v3Folders = invokeurl
+			[
+				url :"https://projectsapi.zoho.com/api/v3/portal/" + portalId + "/projects/" + projectId + "/folders"
+				type :GET
+				connection:"zohoprojects"
+			];
+			try
+			{
+				teamFolderId = ifnull(v3Folders.get("default_project_folder_id"),"").toString();
+			}
+			catch(v3TeamIdErr)
+			{
+				teamFolderId = "";
+			}
+			projectFolderMap = Map();
+			try
+			{
+				projectFolderMap = v3Folders.get("project_default_folder");
+				folderLookupError = folderLookupError + "project_default_folder keys=" + projectFolderMap.keys().toString() + " name=" + ifnull(projectFolderMap.get("name"),"").toString() + " id=" + ifnull(projectFolderMap.get("id"),"").toString() + " wd=" + ifnull(projectFolderMap.get("workdrive_folder_id"),"").toString() + " ";
+			}
+			catch(v3ProjectFolderDumpErr)
+			{
+			}
+			try
+			{
+				v3DocsFolder = v3Folders.get("default_folder");
+				folderLookupError = folderLookupError + "default_folder keys=" + v3DocsFolder.keys().toString() + " name=" + ifnull(v3DocsFolder.get("name"),"").toString() + " id=" + ifnull(v3DocsFolder.get("id"),"").toString() + " wd=" + ifnull(v3DocsFolder.get("workdrive_folder_id"),"").toString() + " ";
+			}
+			catch(v3DefaultFolderDumpErr)
+			{
+			}
+			try
+			{
+				workspaceLibraryId = ifnull(projectFolderMap.get("workdrive_folder_id"),"").toString();
+			}
+			catch(v3WorkspaceWdErr)
+			{
+				workspaceLibraryId = "";
+			}
+			if(workspaceLibraryId == "")
+			{
+				try
+				{
+					workspaceLibraryId = ifnull(v3DocsFolder.get("workdrive_folder_id"),"").toString();
+				}
+				catch(v3WorkspaceDefaultErr)
+				{
+				}
+			}
+			if(teamFolderId != "" && teamFolderId != workspaceLibraryId)
+			{
+				workdriveFolderId = teamFolderId;
+			}
+			allNested = List();
+			nestedFolders = List();
+			try
+			{
+				nestedFolders = projectFolderMap.get("folders");
+			}
+			catch(v3PdfNestedErr)
+			{
+				nestedFolders = List();
+			}
+			try
+			{
+				for each  nestedFolder in nestedFolders
+				{
+					allNested.add(nestedFolder);
+					innerFolders = List();
+					try
+					{
+						innerFolders = nestedFolder.get("folders");
+					}
+					catch(v3PdfInnerErr)
+					{
+						innerFolders = List();
+					}
+					try
+					{
+						for each  innerFolder in innerFolders
+						{
+							allNested.add(innerFolder);
+						}
+					}
+					catch(v3PdfInnerLoopErr)
+					{
+					}
+				}
+			}
+			catch(v3PdfNestedLoopErr)
+			{
+			}
+			nestedFolders = List();
+			try
+			{
+				nestedFolders = v3DocsFolder.get("folders");
+			}
+			catch(v3DefNestedErr)
+			{
+				nestedFolders = List();
+			}
+			try
+			{
+				for each  nestedFolder in nestedFolders
+				{
+					allNested.add(nestedFolder);
+					innerFolders = List();
+					try
+					{
+						innerFolders = nestedFolder.get("folders");
+					}
+					catch(v3DefInnerErr)
+					{
+						innerFolders = List();
+					}
+					try
+					{
+						for each  innerFolder in innerFolders
+						{
+							allNested.add(innerFolder);
+						}
+					}
+					catch(v3DefInnerLoopErr)
+					{
+					}
+				}
+			}
+			catch(v3DefNestedLoopErr)
+			{
+			}
+			nestedFolders = List();
+			try
+			{
+				nestedFolders = v3Folders.get("folders");
+			}
+			catch(v3TopNestedErr)
+			{
+				nestedFolders = List();
+			}
+			try
+			{
+				for each  nestedFolder in nestedFolders
+				{
+					allNested.add(nestedFolder);
+					innerFolders = List();
+					try
+					{
+						innerFolders = nestedFolder.get("folders");
+					}
+					catch(v3TopInnerErr)
+					{
+						innerFolders = List();
+					}
+					try
+					{
+						for each  innerFolder in innerFolders
+						{
+							allNested.add(innerFolder);
+						}
+					}
+					catch(v3TopInnerLoopErr)
+					{
+					}
+				}
+			}
+			catch(v3TopNestedLoopErr)
+			{
+			}
+			matchedByName = "";
+			firstChildFolder = "";
+			attachmentsFolderId = "";
+			nameNeedle = projectName.toLowerCase();
+			folderLookupError = folderLookupError + " nested=";
+			try
+			{
+				for each  nestedFolder in allNested
+				{
+					nestedName = "";
+					nestedId = "";
+					isFolderFlag = true;
+					try
+					{
+						nestedName = ifnull(nestedFolder.get("name"),"").toString();
+					}
+					catch(nestedNameErr)
+					{
+					}
+					try
+					{
+						nestedId = ifnull(nestedFolder.get("workdrive_folder_id"),"").toString();
+					}
+					catch(nestedWdErr)
+					{
+					}
+					if(nestedId == "")
+					{
+						try
+						{
+							nestedId = ifnull(nestedFolder.get("id"),"").toString();
+						}
+						catch(nestedIdErr)
+						{
+						}
+					}
+					try
+					{
+						isFolderFlag = nestedFolder.get("is_folder");
+					}
+					catch(nestedIsFolderErr)
+					{
+						isFolderFlag = true;
+					}
+					folderLookupError = folderLookupError + nestedName + ":" + nestedId + ",";
+					if(isFolderFlag != false && nestedId != "" && nestedId != "crmworkspace" && nestedId != projectId && nestedId != workspaceLibraryId && nestedId.length() > 12 && nestedName.toLowerCase().contains(".pdf") == false)
+					{
+						if(nestedName.toLowerCase().contains("attachments"))
+						{
+							attachmentsFolderId = nestedId;
+						}
+						if(firstChildFolder == "")
+						{
+							firstChildFolder = nestedId;
+						}
+						if(nameNeedle != "" && nestedName.toLowerCase().contains(nameNeedle))
+						{
+							matchedByName = nestedId;
+						}
+						if(matchedByName == "" && projectKey != "" && nestedName.toLowerCase().contains(projectKey.toLowerCase()))
+						{
+							matchedByName = nestedId;
+						}
+						if(matchedByName == "" && selectedSONumber.toString() != "" && nestedName.contains(selectedSONumber.toString()))
+						{
+							matchedByName = nestedId;
+						}
+						if(matchedByName == "" && nestedId == teamFolderId)
+						{
+							matchedByName = nestedId;
+						}
+					}
+				}
+			}
+			catch(allNestedLoopErr)
+			{
+			}
+			if(workdriveFolderId == "")
+			{
+				wdHeaders = Map();
+				wdHeaders.put("Accept","application/vnd.api+json");
+				wdListParents = List();
+				if(workspaceLibraryId != "")
+				{
+					wdListParents.add(workspaceLibraryId);
+				}
+				if(teamFolderId != "" && teamFolderId != workspaceLibraryId)
+				{
+					wdListParents.add(teamFolderId);
+				}
+				if(attachmentsFolderId != "" && attachmentsFolderId != workspaceLibraryId && attachmentsFolderId != teamFolderId)
+				{
+					wdListParents.add(attachmentsFolderId);
+				}
+				for each  wdListParent in wdListParents
+				{
+					if(matchedByName == "")
+					{
+						wdListUrls = List();
+						wdListUrls.add("https://www.zohoapis.com/workdrive/api/v1/files/" + wdListParent + "/files?filter%5Btype%5D=folder&page%5Blimit%5D=50");
+						wdListUrls.add("https://www.zohoapis.com/workdrive/api/v1/teamfolders/" + wdListParent + "/folders?page%5Blimit%5D=50");
+						for each  wdListUrl in wdListUrls
+						{
+							if(matchedByName == "")
+							{
+								try
+								{
+									wdResp = invokeurl
+									[
+										url :wdListUrl
+										type :GET
+										headers:wdHeaders
+										connection:"zohoprojects"
+									];
+									wdChildList = List();
+									try
+									{
+										wdChildList = wdResp.get("data");
+									}
+									catch(wdChildDataErr)
+									{
+										wdChildList = List();
+									}
+									folderLookupError = folderLookupError + " wdfiles:" + wdListParent + "=";
+									try
+									{
+										folderLookupError = folderLookupError + wdResp.keys().toString();
+									}
+									catch(wdChildKeysErr)
+									{
+										try
+										{
+											folderLookupError = folderLookupError + wdResp.toString().left(180);
+										}
+										catch(wdChildBodyErr)
+										{
+											folderLookupError = folderLookupError + "empty";
+										}
+									}
+									try
+									{
+										if(wdChildList.size() <= 0)
+										{
+											folderLookupError = folderLookupError + wdResp.toString().left(180);
+										}
+									}
+									catch(wdChildEmptyErr)
+									{
+									}
+									for each  wdChild in wdChildList
+									{
+										wdChildName = "";
+										wdChildId = "";
+										wdChildType = "";
+										isFolderFlag = false;
+										try
+										{
+											wdChildId = ifnull(wdChild.get("id"),"").toString();
+										}
+										catch(wdChildIdErr)
+										{
+										}
+										try
+										{
+											wdChildType = ifnull(wdChild.get("type"),"").toString();
+										}
+										catch(wdChildTypeErr)
+										{
+										}
+										try
+										{
+											attrMap = wdChild.get("attributes");
+											wdChildName = ifnull(attrMap.get("name"),"").toString();
+											if(wdChildName == "")
+											{
+												wdChildName = ifnull(attrMap.get("FileName"),"").toString();
+											}
+											try
+											{
+												isFolderFlag = attrMap.get("is_folder");
+											}
+											catch(wdChildIsFolderErr)
+											{
+												isFolderFlag = false;
+											}
+											if(wdChildId == "")
+											{
+												wdChildId = ifnull(attrMap.get("resource_id"),"").toString();
+											}
+										}
+										catch(wdChildAttrErr)
+										{
+										}
+										folderLookupError = folderLookupError + wdChildName + ":" + wdChildId + ",";
+										if(wdChildId != "" && wdChildId != workspaceLibraryId && wdChildName.toLowerCase().contains(".pdf") == false)
+										{
+											if(firstChildFolder == "")
+											{
+												firstChildFolder = wdChildId;
+											}
+											if(nameNeedle != "" && wdChildName.toLowerCase().contains(nameNeedle))
+											{
+												matchedByName = wdChildId;
+											}
+											if(matchedByName == "" && projectKey != "" && wdChildName.toLowerCase().contains(projectKey.toLowerCase()))
+											{
+												matchedByName = wdChildId;
+											}
+											if(matchedByName == "" && selectedSONumber.toString() != "" && wdChildName.contains(selectedSONumber.toString()))
+											{
+												matchedByName = wdChildId;
+											}
+										}
+									}
+								}
+								catch(wdListFilesErr)
+								{
+									folderLookupError = folderLookupError + " wdfiles:" + wdListParent + " " + wdListFilesErr.toString();
+								}
+							}
+						}
+					}
+				}
+			}
+			if(matchedByName != "")
+			{
+				workdriveFolderId = matchedByName;
+			}
+			if(workdriveFolderId == workspaceLibraryId)
+			{
+				workdriveFolderId = "";
+			}
+			folderLookupError = folderLookupError + "v3 folders keys=" + v3Folders.keys().toString() + " team=" + teamFolderId + " workspace=" + workspaceLibraryId + " using=" + workdriveFolderId;
+		}
+		catch(v3FoldersErr)
+		{
+			folderLookupError = folderLookupError + "v3 folders GET: " + v3FoldersErr.toString();
+		}
 		try
 		{
 			v3Docs = invokeurl
@@ -885,55 +1347,35 @@ try
 			];
 			try
 			{
-				workdriveFolderId = ifnull(v3Docs.get("workdrive_folder_id"),"").toString();
+				folderLookupError = folderLookupError + " v3 docs keys=" + v3Docs.keys().toString();
 			}
-			catch(v3FolderTopErr)
+			catch(v3DocsKeysErr)
 			{
-				workdriveFolderId = "";
 			}
 			if(workdriveFolderId == "")
 			{
-				v3DocsFolder = Map();
 				try
 				{
 					v3DocsFolder = v3Docs.get("documents");
-					workdriveFolderId = ifnull(v3DocsFolder.get("workdrive_folder_id"),"").toString();
+					folderCandidate = ifnull(v3DocsFolder.get("workdrive_folder_id"),"").toString();
+					if(folderCandidate == "" || folderCandidate == teamFolderId || folderCandidate == workspaceLibraryId)
+					{
+						folderCandidate = ifnull(v3DocsFolder.get("id"),"").toString();
+					}
+					if(folderCandidate != "" && folderCandidate != teamFolderId && folderCandidate != workspaceLibraryId && folderCandidate != projectId && folderCandidate != "crmworkspace")
+					{
+						workdriveFolderId = folderCandidate;
+						folderLookupError = folderLookupError + " using=" + workdriveFolderId;
+					}
 				}
-				catch(v3FolderDocsErr)
+				catch(v3DocsFolderIdErr)
 				{
-				}
-			}
-			if(workdriveFolderId == "")
-			{
-				v3DocsFolder = Map();
-				try
-				{
-					v3DocsFolder = v3Docs.get("data");
-					workdriveFolderId = ifnull(v3DocsFolder.get("workdrive_folder_id"),"").toString();
-				}
-				catch(v3FolderDataErr)
-				{
-				}
-			}
-			if(workdriveFolderId == "crmworkspace" || workdriveFolderId == projectId)
-			{
-				workdriveFolderId = "";
-			}
-			if(workdriveFolderId == "")
-			{
-				try
-				{
-					folderLookupError = "v3 title=" + ifnull(v3Docs.get("title"),"").toString() + " error=" + ifnull(v3Docs.get("error"),"").toString();
-				}
-				catch(v3DumpErr)
-				{
-					folderLookupError = "v3 documents GET had no workdrive_folder_id";
 				}
 			}
 		}
 		catch(v3DocsErr)
 		{
-			folderLookupError = v3DocsErr.toString();
+			folderLookupError = folderLookupError + " v3 documents GET: " + v3DocsErr.toString();
 		}
 		if(workdriveFolderId == "")
 		{
@@ -989,56 +1431,37 @@ try
 							folderValText = "";
 						}
 					}
-					if(folderValText != "" && folderValText != "crmworkspace" && folderValText != projectId && folderValText.length() > 12 && folderValText.replaceAll("[^a-zA-Z]","") != "")
+					if(folderValText != "" && folderValText != "crmworkspace" && folderValText != projectId && folderValText != teamFolderId && folderValText != workspaceLibraryId && folderValText.length() > 12 && folderValText.replaceAll("[^a-zA-Z]","") != "")
 					{
 						workdriveFolderId = folderValText;
 					}
 				}
 			}
-			if(workdriveFolderId == "")
+			if(folderLookupError != "")
 			{
-				try
-				{
-					folderLookupError = foldersResp.toString();
-				}
-				catch(folderDumpErr)
-				{
-					folderLookupError = "";
-				}
-				if(folderLookupError == "")
-				{
-					try
-					{
-						folderLookupError = "title=" + ifnull(foldersResp.get("title"),"").toString();
-					}
-					catch(folderTitleErr)
-					{
-					}
-					try
-					{
-						folderLookupError = folderLookupError + " error=" + ifnull(foldersResp.get("error"),"").toString();
-					}
-					catch(folderErrorErr)
-					{
-					}
-					try
-					{
-						folderLookupError = folderLookupError + " folders=" + foldersResp.get("folders").size().toString();
-					}
-					catch(folderSizeErr)
-					{
-					}
-				}
-				if(folderLookupError == "")
-				{
-					folderLookupError = "(empty folders response)";
-				}
+				folderLookupError = folderLookupError + " ";
+			}
+			try
+			{
+				folderLookupError = folderLookupError + "rest folders=" + foldersResp.get("folders").size().toString();
+			}
+			catch(folderSizeErr)
+			{
+				folderLookupError = folderLookupError + "rest folders empty";
 			}
 		}
 		catch(foldersRespErr)
 		{
-			folderLookupError = foldersRespErr.toString();
+			if(folderLookupError != "")
+			{
+				folderLookupError = folderLookupError + " ";
+			}
+			folderLookupError = folderLookupError + foldersRespErr.toString();
 		}
+		}
+		if(workdriveFolderId == workspaceLibraryId)
+		{
+			workdriveFolderId = "";
 		}
 	}
 
@@ -1291,38 +1714,132 @@ try
 							connection:"zcrm"
 						];
 						pdfFile.setFileName(pdfFileName);
-						pdfFile.setParamName("uploaddoc");
-						legacyResponse = invokeurl
-						[
-							url :documentsUrl
-							type :POST
-							files:pdfFile
-							connection:"zohoprojects"
-						];
-						pdfUploadError = "Documents POST returned empty.";
-						try
+						if(workdriveFolderId == "" || workdriveFolderId == workspaceLibraryId)
 						{
-							postRow = legacyResponse.get(0);
+							pdfUploadError = "No project Documents folder. team=" + teamFolderId + " workspace=" + workspaceLibraryId + " using=" + workdriveFolderId;
 						}
-						catch(postListErr)
+						else
 						{
-							postRow = Map();
-						}
-						try
-						{
-							pdfUploadError = "POST name=" + ifnull(postRow.get("name"),"").toString() + " id=" + ifnull(postRow.get("id"),"").toString();
-						}
-						catch(postNameErr)
-						{
+							pdfFile.setParamName("content");
+							wdUploadUrl = "https://www.zohoapis.com/workdrive/api/v1/upload?filename=" + encodeUrl(pdfFileName) + "&parent_id=" + workdriveFolderId + "&override-name-exist=true";
+							legacyResponse = invokeurl
+							[
+								url :wdUploadUrl
+								type :POST
+								files:pdfFile
+								connection:"zohoprojects"
+							];
+							pdfUploadError = "WorkDrive POST returned empty.";
 							try
 							{
-								if(legacyResponse.toString() != "")
+								if(legacyResponse != null && legacyResponse.containsKey("error"))
 								{
 									pdfUploadError = legacyResponse.toString();
+								}
+								else if(legacyResponse.toString() != "")
+								{
+									pdfUploadError = "POST " + legacyResponse.toString();
 								}
 							}
 							catch(postDumpErr)
 							{
+							}
+							try
+							{
+								wdData = List();
+								wdData = legacyResponse.get("data");
+								for each  wdItem in wdData
+								{
+									docName = "";
+									folderParentId = "";
+									try
+									{
+										attrMap = wdItem.get("attributes");
+										docName = ifnull(attrMap.get("FileName"),"").toString();
+										if(docName == "")
+										{
+											docName = ifnull(attrMap.get("name"),"").toString();
+										}
+										if(docName == "")
+										{
+											docName = ifnull(attrMap.get("filename"),"").toString();
+										}
+										if(docName == "")
+										{
+											docName = ifnull(attrMap.get("display_attr_name"),"").toString();
+										}
+										folderParentId = ifnull(attrMap.get("parent_id"),"").toString();
+									}
+									catch(wdAttrErr)
+									{
+									}
+									if(docName == "")
+									{
+										try
+										{
+											docName = ifnull(wdItem.get("name"),"").toString();
+										}
+										catch(wdNameErr)
+										{
+										}
+									}
+									if((docName.toLowerCase().contains(pdfFileNeedle) || (pdfNeedle != "" && docName.toLowerCase().contains(pdfNeedle))) && folderParentId == workdriveFolderId)
+									{
+										pdfUploaded = true;
+									}
+								}
+							}
+							catch(wdParseErr)
+							{
+							}
+							if(!pdfUploaded)
+							{
+								try
+								{
+									pdfFile = invokeurl
+									[
+										url :"https://www.zohoapis.com/crm/v2/Install_Price_Sheets/" + priceSheetId + "/Attachments/" + latestPdf.get("id")
+										type :GET
+										connection:"zcrm"
+									];
+									pdfFile.setFileName(pdfFileName);
+									wdResp = zoho.workdrive.uploadFile(pdfFile,workdriveFolderId,encodeUrl(pdfFileName),true,"zohoprojects");
+									pdfUploadError = pdfUploadError + " workdrive task " + wdResp.toString();
+									try
+									{
+										wdData = List();
+										wdData = wdResp.get("data");
+										for each  wdItem in wdData
+										{
+											docName = "";
+											folderParentId = "";
+											try
+											{
+												attrMap = wdItem.get("attributes");
+												docName = ifnull(attrMap.get("FileName"),"").toString();
+												if(docName == "")
+												{
+													docName = ifnull(attrMap.get("name"),"").toString();
+												}
+												folderParentId = ifnull(attrMap.get("parent_id"),"").toString();
+											}
+											catch(wdTaskAttrErr)
+											{
+											}
+											if((docName.toLowerCase().contains(pdfFileNeedle) || (pdfNeedle != "" && docName.toLowerCase().contains(pdfNeedle))) && folderParentId == workdriveFolderId)
+											{
+												pdfUploaded = true;
+											}
+										}
+									}
+									catch(wdTaskParseErr)
+									{
+									}
+								}
+								catch(wdTaskErr)
+								{
+									pdfUploadError = pdfUploadError + " workdrive task " + wdTaskErr.toString();
+								}
 							}
 						}
 					}
@@ -1330,25 +1847,35 @@ try
 					{
 						pdfUploadError = priceSheetLegacyErr.toString();
 					}
+					if(!pdfUploaded)
+					{
 					try
 					{
 						docsGet = invokeurl
 						[
-							url :documentsListUrl
+							url :"https://projectsapi.zoho.com/api/v3/portal/" + portalId + "/projects/" + projectId + "/documents"
 							type :GET
 							connection:"zohoprojects"
 						];
 						docRows = List();
 						try
 						{
-							if(docsGet.get("dataobj") != null)
-							{
-								docRows = docsGet.get("dataobj");
-							}
+							docRows = docsGet.get("documents");
 						}
 						catch(docsDataobjErr)
 						{
 						}
+						try
+						{
+							if(docRows.size() <= 0)
+							{
+								docRows = docsGet.get("data");
+							}
+						}
+						catch(docsDataErr)
+						{
+						}
+						v3NameList = "";
 						for each docRow in docRows
 						{
 							docName = "";
@@ -1369,38 +1896,41 @@ try
 								{
 								}
 							}
-							if(docName.toLowerCase().contains(pdfFileNeedle) || (pdfNeedle != "" && docName.toLowerCase().contains(pdfNeedle)))
-							{
-								pdfUploaded = true;
-							}
-						}
-						if(!pdfUploaded)
-						{
-							pdfUploadError = pdfUploadError + " GET names=";
-							for each docRow in docRows
+							if(docName == "")
 							{
 								try
 								{
-									pdfUploadError = pdfUploadError + ifnull(docRow.get("res_name"),"").toString() + ",";
+									attrMap = docRow.get("attributes");
+									docName = ifnull(attrMap.get("FileName"),"").toString();
+									if(docName == "")
+									{
+										docName = ifnull(attrMap.get("name"),"").toString();
+									}
 								}
-								catch(docDumpErr)
+								catch(docAttrErr)
 								{
 								}
 							}
-							try
+							if(docName != "")
 							{
-								pdfUploadError = pdfUploadError + " title=" + ifnull(docsGet.get("title"),"").toString();
+								v3NameList = v3NameList + docName + ",";
 							}
-							catch(docsTitleErr)
-							{
-							}
+						}
+						pdfUploadError = pdfUploadError + " GET names=" + v3NameList;
+						try
+						{
+							pdfUploadError = pdfUploadError + " keys=" + docsGet.keys().toString();
+						}
+						catch(docsTitleErr)
+						{
 						}
 					}
 					catch(docsGetErr)
 					{
 						pdfUploadError = pdfUploadError + " GET: " + docsGetErr.toString();
 					}
-					if(!pdfUploaded && workdriveFolderId != "")
+					}
+					if(!pdfUploaded && workdriveFolderId != "" && workdriveFolderId != workspaceLibraryId)
 					{
 						try
 						{
@@ -1411,14 +1941,12 @@ try
 								connection:"zcrm"
 							];
 							pdfFileRetry.setFileName(pdfFileName);
-							pdfFileRetry.setParamName("uploaddoc");
-							folderParams = Map();
-							folderParams.put("folder_id",workdriveFolderId);
+							pdfFileRetry.setParamName("content");
+							wdUploadUrl = "https://workdrive.zoho.com/api/v1/upload?filename=" + encodeUrl(pdfFileName) + "&parent_id=" + workdriveFolderId + "&override-name-exist=true";
 							retryResponse = invokeurl
 							[
-								url :documentsUrl
+								url :wdUploadUrl
 								type :POST
-								parameters:folderParams
 								files:pdfFileRetry
 								connection:"zohoprojects"
 							];
@@ -1426,57 +1954,45 @@ try
 							{
 								if(retryResponse.toString() != "")
 								{
-									pdfUploadError = retryResponse.toString();
+									pdfUploadError = pdfUploadError + " workdrive.com POST " + retryResponse.toString();
 								}
 							}
 							catch(retryDumpErr)
 							{
 							}
-							docsGetRetry = invokeurl
-							[
-								url :documentsUrl + "?range=100&category=all&folder_id=" + workdriveFolderId
-								type :GET
-								connection:"zohoprojects"
-							];
-							docRows = List();
 							try
 							{
-								if(docsGetRetry.get("dataobj") != null)
+								wdData = List();
+								wdData = retryResponse.get("data");
+								for each  wdItem in wdData
 								{
-									docRows = docsGetRetry.get("dataobj");
-								}
-							}
-							catch(retryDataobjErr)
-							{
-							}
-							for each docRow in docRows
-							{
-								docName = "";
-								try
-								{
-									docName = ifnull(docRow.get("res_name"),"").toString();
-								}
-								catch(retryResErr)
-								{
-								}
-								if(docName.toLowerCase().contains(pdfFileNeedle) || (pdfNeedle != "" && docName.toLowerCase().contains(pdfNeedle)))
-								{
-									pdfUploaded = true;
-								}
-							}
-							if(!pdfUploaded)
-							{
-								pdfUploadError = pdfUploadError + " GET names=";
-								for each docRow in docRows
-								{
+									docName = "";
+									folderParentId = "";
 									try
 									{
-										pdfUploadError = pdfUploadError + ifnull(docRow.get("res_name"),"").toString() + ",";
+										attrMap = wdItem.get("attributes");
+										docName = ifnull(attrMap.get("FileName"),"").toString();
+										if(docName == "")
+										{
+											docName = ifnull(attrMap.get("name"),"").toString();
+										}
+										if(docName == "")
+										{
+											docName = ifnull(attrMap.get("filename"),"").toString();
+										}
+										folderParentId = ifnull(attrMap.get("parent_id"),"").toString();
 									}
-									catch(retryNameDumpErr)
+									catch(retryAttrErr)
 									{
 									}
+									if((docName.toLowerCase().contains(pdfFileNeedle) || (pdfNeedle != "" && docName.toLowerCase().contains(pdfNeedle))) && folderParentId == workdriveFolderId)
+									{
+										pdfUploaded = true;
+									}
 								}
+							}
+							catch(retryParseErr)
+							{
 							}
 						}
 						catch(priceSheetRetryErr)
@@ -1728,37 +2244,68 @@ try
 				soPostRow = Map();
 				try
 				{
-					soPdf.setParamName("uploaddoc");
-					soLegacyResponse = invokeurl
-					[
-						url :documentsUrl
-						type :POST
-						files:soPdf
-						connection:"zohoprojects"
-					];
-					soUploadError = "Documents POST returned empty.";
-					try
+					if(workdriveFolderId == "" || workdriveFolderId == workspaceLibraryId)
 					{
-						soPostRow = soLegacyResponse.get(0);
+						soUploadError = "No project Documents folder. team=" + teamFolderId + " workspace=" + workspaceLibraryId + " using=" + workdriveFolderId;
 					}
-					catch(soPostListErr)
+					else
 					{
-						soPostRow = Map();
-					}
-					try
-					{
-						soUploadError = "POST name=" + ifnull(soPostRow.get("name"),"").toString() + " id=" + ifnull(soPostRow.get("id"),"").toString();
-					}
-					catch(soPostNameErr)
-					{
+						soPdf.setParamName("content");
+						wdUploadUrl = "https://www.zohoapis.com/workdrive/api/v1/upload?filename=" + encodeUrl(soFileName) + "&parent_id=" + workdriveFolderId + "&override-name-exist=true";
+						soLegacyResponse = invokeurl
+						[
+							url :wdUploadUrl
+							type :POST
+							files:soPdf
+							connection:"zohoprojects"
+						];
+						soUploadError = "WorkDrive POST returned empty.";
 						try
 						{
-							if(soLegacyResponse.toString() != "")
+							if(soLegacyResponse != null && soLegacyResponse.containsKey("error"))
 							{
 								soUploadError = soLegacyResponse.toString();
 							}
+							else if(soLegacyResponse.toString() != "")
+							{
+								soUploadError = "POST " + soLegacyResponse.toString();
+							}
 						}
 						catch(soPostDumpErr)
+						{
+						}
+						try
+						{
+							wdData = List();
+							wdData = soLegacyResponse.get("data");
+							for each  wdItem in wdData
+							{
+								docName = "";
+								folderParentId = "";
+								try
+								{
+									attrMap = wdItem.get("attributes");
+									docName = ifnull(attrMap.get("FileName"),"").toString();
+									if(docName == "")
+									{
+										docName = ifnull(attrMap.get("name"),"").toString();
+									}
+									if(docName == "")
+									{
+										docName = ifnull(attrMap.get("filename"),"").toString();
+									}
+									folderParentId = ifnull(attrMap.get("parent_id"),"").toString();
+								}
+								catch(soWdAttrErr)
+								{
+								}
+								if((docName.toLowerCase().contains(soFileNeedle) || docName.toLowerCase().contains(soMatchNeedle)) && folderParentId == workdriveFolderId)
+								{
+									soUploaded = true;
+								}
+							}
+						}
+						catch(soWdParseErr)
 						{
 						}
 					}
@@ -1767,25 +2314,35 @@ try
 				{
 					soUploadError = soLegacyErr.toString();
 				}
+				if(!soUploaded)
+				{
 				try
 				{
 					soDocsGet = invokeurl
 					[
-						url :documentsListUrl
+						url :"https://projectsapi.zoho.com/api/v3/portal/" + portalId + "/projects/" + projectId + "/documents"
 						type :GET
 						connection:"zohoprojects"
 					];
 					docRows = List();
 					try
 					{
-						if(soDocsGet.get("dataobj") != null)
-						{
-							docRows = soDocsGet.get("dataobj");
-						}
+						docRows = soDocsGet.get("documents");
 					}
 					catch(soDataobjErr)
 					{
 					}
+					try
+					{
+						if(docRows.size() <= 0)
+						{
+							docRows = soDocsGet.get("data");
+						}
+					}
+					catch(soDataErr)
+					{
+					}
+					v3NameList = "";
 					for each docRow in docRows
 					{
 						docName = "";
@@ -1796,38 +2353,51 @@ try
 						catch(soResErr)
 						{
 						}
-						if(docName.toLowerCase().contains(soFileNeedle) || docName.toLowerCase().contains(soMatchNeedle))
-						{
-							soUploaded = true;
-						}
-					}
-					if(!soUploaded)
-					{
-						soUploadError = soUploadError + " GET names=";
-						for each docRow in docRows
+						if(docName == "")
 						{
 							try
 							{
-								soUploadError = soUploadError + ifnull(docRow.get("res_name"),"").toString() + ",";
+								docName = ifnull(docRow.get("name"),"").toString();
 							}
-							catch(soNameDumpErr)
+							catch(soNameErr)
 							{
 							}
 						}
-						try
+						if(docName == "")
 						{
-							soUploadError = soUploadError + " title=" + ifnull(soDocsGet.get("title"),"").toString();
+							try
+							{
+								attrMap = docRow.get("attributes");
+								docName = ifnull(attrMap.get("FileName"),"").toString();
+								if(docName == "")
+								{
+									docName = ifnull(attrMap.get("name"),"").toString();
+								}
+							}
+							catch(soAttrErr)
+							{
+							}
 						}
-						catch(soTitleErr)
+						if(docName != "")
 						{
+							v3NameList = v3NameList + docName + ",";
 						}
+					}
+					soUploadError = soUploadError + " GET names=" + v3NameList;
+					try
+					{
+						soUploadError = soUploadError + " keys=" + soDocsGet.keys().toString();
+					}
+					catch(soTitleErr)
+					{
 					}
 				}
 				catch(soDocsGetErr)
 				{
 					soUploadError = soUploadError + " GET: " + soDocsGetErr.toString();
 				}
-				if(!soUploaded && workdriveFolderId != "")
+				}
+				if(!soUploaded && workdriveFolderId != "" && workdriveFolderId != workspaceLibraryId)
 				{
 					try
 					{
@@ -1838,14 +2408,12 @@ try
 							connection:"books"
 						];
 						soPdfRetry.setFileName(soFileName);
-						soPdfRetry.setParamName("uploaddoc");
-						soFolderParams = Map();
-						soFolderParams.put("folder_id",workdriveFolderId);
+						soPdfRetry.setParamName("content");
+						wdUploadUrl = "https://workdrive.zoho.com/api/v1/upload?filename=" + encodeUrl(soFileName) + "&parent_id=" + workdriveFolderId + "&override-name-exist=true";
 						soRetryResponse = invokeurl
 						[
-							url :documentsUrl
+							url :wdUploadUrl
 							type :POST
-							parameters:soFolderParams
 							files:soPdfRetry
 							connection:"zohoprojects"
 						];
@@ -1853,57 +2421,45 @@ try
 						{
 							if(soRetryResponse.toString() != "")
 							{
-								soUploadError = soRetryResponse.toString();
+								soUploadError = soUploadError + " workdrive.com POST " + soRetryResponse.toString();
 							}
 						}
 						catch(soRetryDumpErr)
 						{
 						}
-						soDocsGetRetry = invokeurl
-						[
-							url :documentsUrl + "?range=100&category=all&folder_id=" + workdriveFolderId
-							type :GET
-							connection:"zohoprojects"
-						];
-						docRows = List();
 						try
 						{
-							if(soDocsGetRetry.get("dataobj") != null)
+							wdData = List();
+							wdData = soRetryResponse.get("data");
+							for each  wdItem in wdData
 							{
-								docRows = soDocsGetRetry.get("dataobj");
-							}
-						}
-						catch(soRetryDataobjErr)
-						{
-						}
-						for each docRow in docRows
-						{
-							docName = "";
-							try
-							{
-								docName = ifnull(docRow.get("res_name"),"").toString();
-							}
-							catch(soRetryResErr)
-							{
-							}
-							if(docName.toLowerCase().contains(soFileNeedle) || docName.toLowerCase().contains(soMatchNeedle))
-							{
-								soUploaded = true;
-							}
-						}
-						if(!soUploaded)
-						{
-							soUploadError = soUploadError + " GET names=";
-							for each docRow in docRows
-							{
+								docName = "";
+								folderParentId = "";
 								try
 								{
-									soUploadError = soUploadError + ifnull(docRow.get("res_name"),"").toString() + ",";
+									attrMap = wdItem.get("attributes");
+									docName = ifnull(attrMap.get("FileName"),"").toString();
+									if(docName == "")
+									{
+										docName = ifnull(attrMap.get("name"),"").toString();
+									}
+									if(docName == "")
+									{
+										docName = ifnull(attrMap.get("filename"),"").toString();
+									}
+									folderParentId = ifnull(attrMap.get("parent_id"),"").toString();
 								}
-								catch(soRetryNameDumpErr)
+								catch(soRetryAttrErr)
 								{
 								}
+								if((docName.toLowerCase().contains(soFileNeedle) || docName.toLowerCase().contains(soMatchNeedle)) && folderParentId == workdriveFolderId)
+								{
+									soUploaded = true;
+								}
 							}
+						}
+						catch(soRetryParseErr)
+						{
 						}
 					}
 					catch(soRetryErr)
@@ -2593,9 +3149,6 @@ try
 							allocatedHours = bucket.get("hours_each") * bucket.get("sold_qty");
 							linePayload = Map();
 							linePayload.put("name",bucket.get("name"));
-							projectRef = Map();
-							projectRef.put("id",projectId);
-							linePayload.put("project",projectRef);
 							layoutRef = Map();
 							layoutRef.put("id","1684307000018866202");
 							linePayload.put("layout",layoutRef);
@@ -2604,6 +3157,9 @@ try
 							linePayload.put("hours_each",bucket.get("hours_each"));
 							linePayload.put("allocated_hours",allocatedHours);
 							linePayload.put("related_task_id",bucket.get("task_id"));
+							taskConnect = Map();
+							taskConnect.put("id",bucket.get("task_id"));
+							linePayload.put("related_task",taskConnect);
 							linePayload.put("catalog_line_id",bucket.get("catalog_id"));
 							statusRef = Map();
 							statusRef.put("id","1684307000018866228");
@@ -2618,17 +3174,6 @@ try
 									headers:headersMap
 									connection:"zohoprojects"
 								];
-								if(lineCreate != null && lineCreate.containsKey("error"))
-								{
-									lineCreate = invokeurl
-									[
-										url :"https://projectsapi.zoho.com/api/v3/portal/" + portalId + "/install_line/entities"
-										type :POST
-										body:linePayload.toString()
-										headers:headersMap
-										connection:"zohoprojects"
-									];
-								}
 								if(lineCreate != null && !lineCreate.containsKey("error"))
 								{
 									lineItemsCreated = lineItemsCreated + 1;
@@ -2687,7 +3232,7 @@ try
 		}
 		if(pdfUploads.size() > 0)
 		{
-			successMessage = successMessage + " Uploaded " + pdfUploads.size().toString() + " PDF(s) to project documents.";
+			successMessage = successMessage + " Uploaded " + pdfUploads.size().toString() + " PDF(s) to project documents. https://projects.zoho.com/portal/tvspro#documents/" + projectId + "/" + workdriveFolderId;
 		}
 	}
 	else
@@ -2714,6 +3259,10 @@ try
 	result.put("tasks_updated",tasksUpdated);
 	result.put("line_items_created",lineItemsCreated);
 	result.put("pdf_uploads",pdfUploads);
+	result.put("documents_folder_id",workdriveFolderId);
+	result.put("team_folder_id",teamFolderId);
+	result.put("workspace_library_id",workspaceLibraryId);
+	result.put("folder_debug",folderLookupError);
 	result.put("warnings",warnings);
 	result.put("price_sheet_id",priceSheetId);
 	result.put("price_sheet_name",priceSheetName);

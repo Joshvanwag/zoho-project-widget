@@ -30,7 +30,14 @@ const els = {
   fieldContainer: document.getElementById("fieldContainer"),
   refreshButton: document.getElementById("refreshButton"),
   createButton: document.getElementById("createButton"),
-  debug: document.getElementById("debug")
+  debug: document.getElementById("debug"),
+  progressOverlay: document.getElementById("progressOverlay"),
+  progressSpinner: document.getElementById("progressSpinner"),
+  progressIcon: document.getElementById("progressIcon"),
+  progressTitle: document.getElementById("progressTitle"),
+  progressDetail: document.getElementById("progressDetail"),
+  progressResult: document.getElementById("progressResult"),
+  progressCloseButton: document.getElementById("progressCloseButton")
 };
 
 const soSection = document.createElement("section");
@@ -50,11 +57,37 @@ function setMessage(type, text) {
   els.message.className = `message ${type}`;
   els.message.textContent = text || "";
 
-  if (!text || type === "info") {
+  if (!text || type === "info" || document.body.classList.contains("progress-open")) {
     els.message.classList.add("hidden");
   } else {
     els.message.classList.remove("hidden");
   }
+}
+
+function setProgressOverlay({ phase = "working", title, detail = "", result = "", showClose = false }) {
+  els.progressOverlay.classList.remove("hidden");
+  els.progressOverlay.dataset.phase = phase;
+  document.body.classList.add("progress-open");
+  els.message.classList.add("hidden");
+
+  els.progressTitle.textContent = title || "";
+  els.progressDetail.textContent = detail || "";
+  els.progressDetail.classList.toggle("hidden", !detail);
+  els.progressResult.textContent = result || "";
+  els.progressResult.classList.toggle("hidden", !result);
+
+  const done = phase !== "working";
+  els.progressSpinner.classList.toggle("hidden", done);
+  els.progressIcon.classList.toggle("hidden", !done);
+  els.progressIcon.textContent = phase === "success" ? "✓" : done ? "!" : "";
+  els.progressCloseButton.classList.toggle("hidden", !showClose);
+}
+
+function hideProgressOverlay() {
+  els.progressOverlay.classList.add("hidden");
+  els.progressOverlay.dataset.phase = "";
+  document.body.classList.remove("progress-open");
+  els.progressCloseButton.classList.add("hidden");
 }
 
 function debug(data) {
@@ -88,7 +121,7 @@ function parseFunctionResult(response) {
   return details || {};
 }
 
-function closeWidgetAfterSuccess() {
+function closeWidgetAfterSuccess(immediate) {
   window.setTimeout(() => {
     try {
       if (ZOHO?.CRM?.UI?.Popup?.closeReload) {
@@ -107,7 +140,7 @@ function closeWidgetAfterSuccess() {
     try {
       window.close();
     } catch (error) {}
-  }, cfg.successCloseDelayMs || 1400);
+  }, immediate ? 0 : (cfg.successCloseDelayMs || 1400));
 }
 
 function sleep(ms) {
@@ -1108,45 +1141,11 @@ function matchPriceSheetForSelectedQuote() {
 
   state.matchedPriceSheet = matched;
   state.matchedPriceSheetPdfName = "";
-  if (matched) loadLatestPriceSheetPdfName(matched).then(() => renderDocumentPreview());
 }
 
 function renderDocumentPreview() {
-  if (!els.soSection || els.soSection.classList.contains("hidden")) return;
-
   const existing = document.getElementById("documentPreview");
   if (existing) existing.remove();
-
-  if (!state.selectedQuoteId) return;
-
-  const selectedQuote = state.eligibleQuotes.find(quote => quote.id === state.selectedQuoteId);
-  const preview = document.createElement("div");
-  preview.id = "documentPreview";
-  preview.className = "document-preview";
-
-  const soNumber = normalize(selectedQuote?.[cfg.quoteSoNumberField]);
-  const sqNumber = quoteNumberTokens(selectedQuote)[0] || "";
-
-  const soLine = document.createElement("p");
-  soLine.textContent = soNumber
-    ? `SO PDF: native CRM Sales Order PDF for SO ${soNumber}`
-    : "SO PDF: a native CRM Sales Order PDF will be generated from the selected SO.";
-  preview.appendChild(soLine);
-
-  const sheetLine = document.createElement("p");
-  if (state.matchedPriceSheet) {
-    const pdfNote = state.matchedPriceSheetPdfName
-      ? `Latest PDF: ${state.matchedPriceSheetPdfName}`
-      : "No PDF attachment found yet; project creation will still continue.";
-    sheetLine.textContent = `Price sheet: ${normalize(state.matchedPriceSheet.Name) || "matched record"} (${pdfNote})`;
-  } else if (sqNumber) {
-    sheetLine.textContent = `Price sheet: none matched for SQ ${sqNumber}. Project creation will still continue.`;
-  } else {
-    sheetLine.textContent = "Price sheet: none matched for the selected Sales Quote. Project creation will still continue.";
-  }
-  preview.appendChild(sheetLine);
-
-  els.soSection.appendChild(preview);
 }
 
 function buildFieldValuesPayload() {
@@ -1191,7 +1190,11 @@ async function saveEditableDealFieldsIfNeeded() {
     return {};
   }
 
-  setMessage("info", "Saving missing fields back to the Deal...");
+  setProgressOverlay({
+    phase: "working",
+    title: "Project is being created.",
+    detail: "Saving deal fields. Please keep this window open."
+  });
 
   const response = await ZOHO.CRM.API.updateRecord({
     Entity: cfg.moduleApiName,
@@ -1215,7 +1218,11 @@ async function saveEditableDealFieldsIfNeeded() {
   });
   validateDeal();
 
-  setMessage("info", "Confirming saved fields...");
+  setProgressOverlay({
+    phase: "working",
+    title: "Project is being created.",
+    detail: "Confirming saved fields. Please keep this window open."
+  });
   await waitForSavedFieldsToBeVisible(payload);
   return payload;
 }
@@ -1278,7 +1285,11 @@ async function waitForTemplateTasks(projectId) {
 
     const count = Number(lastDetails.task_count || 0);
     const needed = Number(lastDetails.ready_count || readyAt);
-    setMessage("info", `Waiting for template tasks (${count} of ${needed})...`);
+    setProgressOverlay({
+      phase: "working",
+      title: "Sending information to the project.",
+      detail: `Waiting for template tasks (${count} of ${needed}). Please keep this window open.`
+    });
 
     if (isFlagTrue(lastDetails.hours_ready) || count >= needed) {
       return lastDetails;
@@ -1304,6 +1315,11 @@ async function createProject() {
   setBusy(true);
   els.createButton.disabled = true;
   els.createButton.textContent = "Creating...";
+  setProgressOverlay({
+    phase: "working",
+    title: "Project is being created.",
+    detail: "Please keep this window open."
+  });
 
   try {
     if (Object.keys(collectEditableDealFieldUpdates()).length > 0) {
@@ -1317,8 +1333,11 @@ async function createProject() {
     }
 
     const createArgs = buildCreateProjectArgs();
-
-    setMessage("", "");
+    setProgressOverlay({
+      phase: "working",
+      title: "Project is being created.",
+      detail: "Please keep this window open."
+    });
 
     const details = await executeCreateProject(createArgs);
 
@@ -1337,11 +1356,19 @@ async function createProject() {
     let hoursDetails = null;
     if (isFlagTrue(details.hours_pending) && details.project_id) {
       try {
-        setMessage("info", `Project created.${projectName} Waiting for template tasks...`);
+        setProgressOverlay({
+          phase: "working",
+          title: "Sending information to the project.",
+          detail: "Waiting for template tasks. Please keep this window open."
+        });
         const readyDetails = await waitForTemplateTasks(details.project_id);
 
         if (isFlagTrue(readyDetails.hours_ready) || Number(readyDetails.task_count || 0) >= Number(readyDetails.ready_count || cfg.templateTaskReadyCount || 20)) {
-          setMessage("info", "Template tasks are ready. Applying price sheet hours...");
+          setProgressOverlay({
+            phase: "working",
+            title: "Sending information to the project.",
+            detail: "Applying hours, documents, and install lines. Please keep this window open."
+          });
           hoursDetails = await executeCreateProject({
             ...createArgs,
             apply_hours_only: true,
@@ -1367,34 +1394,51 @@ async function createProject() {
 
     const uniqueWarnings = [...new Set(warnings.filter(Boolean))];
     const hoursApplied = isFlagTrue(hoursDetails?.hours_applied) || Number(hoursDetails?.tasks_updated || 0) > 0;
-    let successText = `Project created successfully.${projectName}`.trim();
+    const resultLines = [`Project created successfully.${projectName}`.trim()];
     const pdfCount = Number(hoursDetails?.pdf_uploads?.length || details.pdf_uploads?.length || 0);
     if (pdfCount > 0) {
-      successText += ` Uploaded ${pdfCount} PDF(s) to project documents.`;
+      resultLines.push(`Uploaded ${pdfCount} PDF(s) to project documents.`);
     }
     if (hoursApplied) {
       const appliedCount = Number(hoursDetails.tasks_updated || 0);
       const lineCount = Number(hoursDetails.line_items_created || 0);
-      if (appliedCount > 0) successText += ` Applied price sheet hours to ${appliedCount} task(s).`;
-      if (lineCount > 0) successText += ` Created ${lineCount} install line(s).`;
+      if (appliedCount > 0) resultLines.push(`Applied price sheet hours to ${appliedCount} task(s).`);
+      if (lineCount > 0) resultLines.push(`Created ${lineCount} install line(s).`);
     }
     if (uniqueWarnings.length > 0) {
-      successText += ` Warnings: ${uniqueWarnings.join(" ")}`;
+      resultLines.push("", "Warnings:", ...uniqueWarnings);
     }
 
-    setMessage(uniqueWarnings.length > 0 ? "warning" : "success", successText);
+    const resultText = resultLines.join("\n");
+    const resultPhase = uniqueWarnings.length > 0 ? "warning" : "success";
+    setProgressOverlay({
+      phase: resultPhase,
+      title: resultPhase === "success" ? "Project created successfully." : "Project created with warnings.",
+      result: resultText,
+      showClose: true
+    });
 
     if (uniqueWarnings.length === 0) {
       closeWidgetAfterSuccess();
     }
   } catch (error) {
     if (createdProject) {
-      setMessage("warning", error.message || "Project created, but a follow-up step failed.");
+      setProgressOverlay({
+        phase: "warning",
+        title: "Project created with warnings.",
+        result: error.message || "Project created, but a follow-up step failed.",
+        showClose: true
+      });
       els.createButton.textContent = "Project Created";
       els.createButton.disabled = true;
       els.refreshButton.disabled = true;
     } else {
-      setMessage("error", error.message || "Error creating Project.");
+      setProgressOverlay({
+        phase: "error",
+        title: "Project could not be created.",
+        result: error.message || "Error creating Project.",
+        showClose: true
+      });
       els.createButton.disabled = false;
       els.createButton.textContent = hasPendingDealUpdates() ? "Save & Create Project" : "Create Project";
     }
@@ -1410,6 +1454,13 @@ async function createProject() {
 function wireEvents() {
   els.refreshButton.addEventListener("click", loadDeal);
   els.createButton.addEventListener("click", createProject);
+  els.progressCloseButton.addEventListener("click", () => {
+    if (state.projectCreated) {
+      closeWidgetAfterSuccess(true);
+      return;
+    }
+    hideProgressOverlay();
+  });
 }
 
 function requestWidgetSize() {

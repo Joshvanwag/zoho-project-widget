@@ -4,9 +4,19 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Create Zoho Project</title>
-  <link rel="stylesheet" href="style.css?v=20260902-1" />
+  <link rel="stylesheet" href="style.css?v=20260902-3" />
 </head>
 <body>
+  <div id="progressOverlay" class="progress-overlay hidden" role="alertdialog" aria-modal="true" aria-live="polite" aria-labelledby="progressTitle">
+    <div class="progress-card">
+      <div id="progressSpinner" class="progress-spinner" aria-hidden="true"></div>
+      <div id="progressIcon" class="progress-icon hidden" aria-hidden="true"></div>
+      <h2 id="progressTitle">Project is being created.</h2>
+      <p id="progressDetail" class="progress-detail hidden"></p>
+      <p id="progressResult" class="progress-result hidden"></p>
+      <button id="progressCloseButton" type="button" class="progress-close hidden">Close</button>
+    </div>
+  </div>
   <main class="wrap">
     <section class="card">
       <div class="header">
@@ -44,7 +54,7 @@
   </main>
 
   <script src="https://live.zwidgets.com/js-sdk/1.2/ZohoEmbededAppSDK.min.js"></script>
-  <script src="config.js?v=20260902-2"></script>
-  <script src="app.js?v=20260902-2"></script>
+  <script src="config.js?v=20260902-3"></script>
+  <script src="app.js?v=20260902-3"></script>
 </body>
 </html>
